@@ -73,7 +73,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Not RCLONE_*: rclone reads RCLONE_VERSION as its --version flag.
-      E2E_RCLONE_VERSION: v1.69.1
+      E2E_RCLONE_VERSION: v1.76.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
