@@ -347,8 +347,8 @@ class TranslationProject {
     }
 
     const settings = await this.project.settings.get();
-    this._sourceLang = settings.sourceLanguageTag || 'en';
-    this._targetLangs = (settings.languageTags || []).filter(
+    this._sourceLang = settings.baseLocale || settings.sourceLanguageTag || 'en';
+    this._targetLangs = (settings.locales || settings.languageTags || []).filter(
       (tag: string) => tag !== this._sourceLang,
     );
     this._bundles = await selectBundleNested(this.project.db).execute();
@@ -431,10 +431,10 @@ class TranslationProject {
 
     const newMessage = {
       id: messageId,
-      bundleId: bundle.id,
+      bundle_id: bundle.id,
       locale: lang,
       selectors: [],
-      variants: [{ id: variantId, messageId, matches: [], pattern }],
+      variants: [{ id: variantId, message_id: messageId, matches: [], pattern }],
     };
 
     const newBundle = {
