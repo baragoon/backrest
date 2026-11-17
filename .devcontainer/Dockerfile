@@ -1,3 +1,5 @@
+# syntax = docker/dockerfile:1.29.0@sha256:572cebbc2b15e6f84c077742952674889cb63cd5e9b80abdffcbe587b6f19183
+
 FROM mcr.microsoft.com/devcontainers/base:2.2.6-bookworm@sha256:85a349062e4ccc4755304f1264183e604391697608765e72765340b7cb7e2438
 
 # Install Nix in single-user mode for the vscode user
