@@ -45,7 +45,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
-          version: 9
+          version: 12.21.0
 
       - name: Login to Docker Hub
         if: ${{ !inputs.snapshot }}
@@ -184,7 +184,7 @@ jobs:
           node-version: "20"
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
-          version: 9
+          version: 12.21.0
       - name: Build web UI
         run: |
           cd webui && pnpm install && pnpm run build
