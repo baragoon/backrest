@@ -37,7 +37,7 @@ importers:
         version: 6.0.3
       cronstrue:
         specifier: ^3.9.0
-        version: 3.39.0
+        version: 3.41.0
       cross-env:
         specifier: ^10.1.0
         version: 10.1.0
@@ -2122,8 +2122,8 @@ packages:
     engines: {node: '>=0.8'}
     hasBin: true
 
-  cronstrue@3.39.0:
-    resolution: {integrity: sha512-b5lKTLr5uFJZfkjjGx3k/XIHvi1xKmv1wVmHOC1hVUJCgf8SYX/EoX4SHeJKYPVQRXDVddN78lwhmwtnUbdn7w==}
+  cronstrue@3.41.0:
+    resolution: {integrity: sha512-1B5JJP3vsZbP4NOoz9OboFljpcc+aGg6WBQsyGr/Q0LS7ZYoSH9oimGpEglTGMS4ywwY1aYfr1So2GgfdeXj0w==}
     hasBin: true
 
   cross-env@10.1.0:
@@ -5529,7 +5529,7 @@ snapshots:
 
   crc-32@1.2.2: {}
 
-  cronstrue@3.39.0: {}
+  cronstrue@3.41.0: {}
 
   cross-env@10.1.0:
     dependencies:
