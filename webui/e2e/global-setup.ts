@@ -31,12 +31,12 @@ export default async function globalSetup() {
  * E2E_SKIP_WEBUI_BUILD=1 or an mtime marker says dist is already fresh.
  */
 async function buildWebuiDist(): Promise<void> {
-  const distIndex = path.join(WEBUI_DIR, 'dist', 'index.html');
+  const distIndex = path.join(WEBUI_DIR, 'dist', 'index.html.gz');
 
   if (process.env.E2E_SKIP_WEBUI_BUILD === '1') {
     if (!(await exists(distIndex))) {
       throw new Error(
-        'E2E_SKIP_WEBUI_BUILD=1 but webui/dist does not exist; run `pnpm run build` once first',
+        'E2E_SKIP_WEBUI_BUILD=1 but webui/dist/index.html.gz does not exist; run `pnpm run build` once first',
       );
     }
     console.log('[e2e setup] E2E_SKIP_WEBUI_BUILD=1, skipping webui build');
