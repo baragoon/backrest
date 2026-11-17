@@ -52,7 +52,6 @@
     "@inlang/cli": "3.6.0",
     "@inlang/paraglide-js": "3.2.2",
     "@inlang/sdk": "4.2.0",
-    "@lix-js/client": "2.2.1",
     "@playwright/test": "1.65.1",
     "@testing-library/dom": "10.4.2",
     "@testing-library/jest-dom": "7.0.1",
