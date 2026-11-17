@@ -6,7 +6,6 @@ import {
   upsertBundleNested,
   saveProjectToDirectory,
 } from '@inlang/sdk';
-import { openRepository } from '@lix-js/client';
 import fs from 'node:fs';
 import nodeFs from 'node:fs/promises';
 import path from 'node:path';
@@ -336,14 +335,10 @@ class TranslationProject {
   }
 
   async load(projectPath: string): Promise<void> {
-    const repo = await openRepository(pathToFileURL(path.resolve(process.cwd())).href, {
-      nodeishFs: fs as any,
-    });
     this.project = await loadProjectFromDirectory({
       path: path.resolve(process.cwd(), projectPath),
       fs: fs as any,
-      repo,
-    } as any);
+    });
 
     const errors = await this.project.errors.get();
     if (errors.length > 0) {

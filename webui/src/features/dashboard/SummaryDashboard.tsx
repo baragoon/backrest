@@ -9,7 +9,7 @@ import {
   Stack,
   Text,
 } from "@chakra-ui/react";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import React, { useEffect, useMemo, useState } from "react";
 import { FiCheck, FiDatabase, FiRefreshCw, FiServer } from "react-icons/fi";
 import { LuTriangle, LuX } from "react-icons/lu";
