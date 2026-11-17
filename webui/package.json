@@ -53,7 +53,7 @@
     "@inlang/paraglide-js": "2.20.2",
     "@inlang/sdk": "2.7.0",
     "@lix-js/client": "2.2.1",
-    "@playwright/test": "1.60.0",
+    "@playwright/test": "1.65.1",
     "@testing-library/dom": "10.4.2",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.3",
