@@ -22,7 +22,7 @@ require (
 	github.com/ncruces/go-sqlite3 v0.35.1
 	github.com/ncruces/zenity v0.10.14
 	github.com/nicholas-fedor/shoutrrr v0.16.1
-	github.com/pkg/sftp v1.13.10
+	github.com/pkg/sftp v1.13.12
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1
 	github.com/vearutop/statigz v1.5.0
