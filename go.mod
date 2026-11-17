@@ -20,7 +20,7 @@ require (
 	github.com/mattn/go-colorable v0.1.16
 	github.com/natefinch/atomic v1.0.1
 	github.com/ncruces/go-sqlite3 v0.35.1
-	github.com/ncruces/zenity v0.10.14
+	github.com/ncruces/zenity v0.10.15
 	github.com/nicholas-fedor/shoutrrr v0.16.1
 	github.com/pkg/sftp v1.13.12
 	github.com/prometheus/client_golang v1.23.2
@@ -60,7 +60,7 @@ require (
 	github.com/randall77/makefat v0.0.0-20260406194835-1b91746796b7 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/image v0.43.0 // indirect
+	golang.org/x/image v0.44.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
