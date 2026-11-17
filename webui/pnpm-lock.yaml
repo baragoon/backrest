@@ -118,8 +118,8 @@ importers:
         specifier: 19.2.3
         version: 19.2.3(@types/react@19.2.17)
       '@types/react-virtualized':
-        specifier: 9.22.2
-        version: 9.22.2
+        specifier: 9.22.4
+        version: 9.22.4
       '@vitejs/plugin-react':
         specifier: 6.0.3
         version: 6.0.3(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(sass@1.101.0)(tsx@4.22.4))
@@ -1248,8 +1248,8 @@ packages:
     peerDependencies:
       '@types/react': ^19.2.0
 
-  '@types/react-virtualized@9.22.2':
-    resolution: {integrity: sha512-0Eg/ME3OHYWGxs+/n4VelfYrhXssireZaa1Uqj5SEkTpSaBu5ctFGOCVxcOqpGXRiEdrk/7uho9tlZaryCIjHA==}
+  '@types/react-virtualized@9.22.4':
+    resolution: {integrity: sha512-7xBz1a/zXt4Qpogi9khBeaZhphcHPnEF3uchRXsqsKhpHwgxgrpo6OgghLqgc5NWQ6aj5/ws7HaNzIShKNCnXg==}
 
   '@types/react@19.2.17':
     resolution: {integrity: sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw==}
@@ -4246,7 +4246,7 @@ snapshots:
     dependencies:
       '@types/react': 19.2.17
 
-  '@types/react-virtualized@9.22.2':
+  '@types/react-virtualized@9.22.4':
     dependencies:
       '@types/prop-types': 15.7.15
       '@types/react': 19.2.17
