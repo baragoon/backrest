@@ -130,8 +130,8 @@ importers:
         specifier: 26.1.0
         version: 26.1.0(supports-color@7.2.0)
       prettier:
-        specifier: 3.9.4
-        version: 3.9.4
+        specifier: 3.10.1
+        version: 3.10.1
       rc-collapse:
         specifier: 4.0.0
         version: 4.0.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -2592,8 +2592,8 @@ packages:
     resolution: {integrity: sha512-dM0jVuXJPsDN6DvRpea484tCUaMiXWjuCn++HGTqUWzGDjv5tZkEZldAJ/UMlqRYGFrD/etByo4/xOuC/snX2A==}
     engines: {node: '>=20'}
 
-  prettier@3.9.4:
-    resolution: {integrity: sha512-yWG/o/4oJfo036EKAfK6ACAoDOfHeRHx4tuxkfBZiauURiaSmYwlpOr5LQqKtIkRD2z1PLteme2WoxEnj4tHTg==}
+  prettier@3.10.1:
+    resolution: {integrity: sha512-70vp3ZUYoPlFbF9uiTdXHUUCGEIp7d4+6p+8DYbkm2jP7x/3i/paXVF6dopSI3zd/CEitrZN1rc4i85xWmmXlg==}
     engines: {node: '>=14'}
     hasBin: true
 
@@ -6024,7 +6024,7 @@ snapshots:
 
   powershell-utils@0.1.0: {}
 
-  prettier@3.9.4: {}
+  prettier@3.10.1: {}
 
   pretty-format@27.5.1:
     dependencies:
