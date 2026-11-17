@@ -24,7 +24,7 @@ require (
 	github.com/nicholas-fedor/shoutrrr v0.16.1
 	github.com/pkg/sftp v1.13.10
 	github.com/prometheus/client_golang v1.23.2
-	github.com/stretchr/testify v1.11.1
+	github.com/stretchr/testify v1.12.1
 	github.com/vearutop/statigz v1.5.0
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.28.0
@@ -59,6 +59,7 @@ require (
 	github.com/prometheus/procfs v0.21.0 // indirect
 	github.com/randall77/makefat v0.0.0-20260406194835-1b91746796b7 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/image v0.43.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
