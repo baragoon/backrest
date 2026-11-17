@@ -17,7 +17,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/hectane/go-acl v1.0.0
-	github.com/mattn/go-colorable v0.1.15
+	github.com/mattn/go-colorable v0.1.16
 	github.com/natefinch/atomic v1.0.1
 	github.com/ncruces/go-sqlite3 v0.35.1
 	github.com/ncruces/zenity v0.10.14
