@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/garethgeorge/backrest/gen/go/v1sync"
-	"github.com/garethgeorge/backrest/internal/cryptoutil"
+	"github.com/baragoon/backrest/gen/go/v1sync"
+	"github.com/baragoon/backrest/internal/cryptoutil"
 	"go.uber.org/zap"
 )
 

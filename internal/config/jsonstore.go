@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
 	"github.com/natefinch/atomic"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"

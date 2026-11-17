@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/internal/protoutil"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/internal/protoutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

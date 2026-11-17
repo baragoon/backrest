@@ -14,9 +14,9 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/test/helpers"
-	test "github.com/garethgeorge/backrest/test/helpers"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/test/helpers"
+	test "github.com/baragoon/backrest/test/helpers"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -373,7 +373,7 @@ func initRepoHelper(t *testing.T, config *v1.Config, repo *v1.Repo) *RepoOrchest
 // TestConfigPasswordPrecedence verifies that a password set in the Backrest
 // repo config takes precedence over RESTIC_PASSWORD (and related env vars) set
 // in the process environment. This is a regression test for
-// https://github.com/garethgeorge/backrest/issues/1139.
+// https://github.com/baragoon/backrest/issues/1139.
 func TestConfigPasswordPrecedence(t *testing.T) {
 	// Cannot use t.Parallel() because t.Setenv is used.
 

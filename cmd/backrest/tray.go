@@ -9,7 +9,7 @@ import (
 	"runtime"
 
 	"fyne.io/systray"
-	"github.com/garethgeorge/backrest/internal/env"
+	"github.com/baragoon/backrest/internal/env"
 )
 
 func startTray() {

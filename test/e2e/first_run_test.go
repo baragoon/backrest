@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/gen/go/v1/v1connect"
-	"github.com/garethgeorge/backrest/internal/testutil"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/gen/go/v1/v1connect"
+	"github.com/baragoon/backrest/internal/testutil"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )

@@ -5,9 +5,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/garethgeorge/backrest/gen/go/v1sync"
-	"github.com/garethgeorge/backrest/internal/cryptoutil"
-	"github.com/garethgeorge/backrest/internal/testutil"
+	"github.com/baragoon/backrest/gen/go/v1sync"
+	"github.com/baragoon/backrest/internal/cryptoutil"
+	"github.com/baragoon/backrest/internal/testutil"
 )
 
 // fakeStream is a pair of in-memory channels simulating a bidirectional transport.

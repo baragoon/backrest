@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/internal/env"
-	"github.com/garethgeorge/backrest/internal/oplog"
-	"github.com/garethgeorge/backrest/internal/protoutil"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/internal/env"
+	"github.com/baragoon/backrest/internal/oplog"
+	"github.com/baragoon/backrest/internal/protoutil"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/emptypb"
 )

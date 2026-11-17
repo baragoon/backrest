@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/garethgeorge/backrest/gen/go/v1sync"
+	"github.com/baragoon/backrest/gen/go/v1sync"
 	"google.golang.org/protobuf/proto"
 )
 

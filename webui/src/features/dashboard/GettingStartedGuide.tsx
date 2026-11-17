@@ -41,7 +41,7 @@ export const GettingStartedGuide = () => {
 
       <Text mb={4}>
         <Link
-          href="https://github.com/garethgeorge/backrest"
+          href="https://github.com/baragoon/backrest"
           target="_blank"
           colorPalette="blue"
         >

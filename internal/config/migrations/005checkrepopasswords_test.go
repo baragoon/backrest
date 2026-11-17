@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
 )
 
 func TestMigration005CheckRepoPasswords(t *testing.T) {

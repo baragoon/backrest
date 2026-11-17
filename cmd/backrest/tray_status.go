@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"fyne.io/systray"
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/internal/oplog"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/internal/oplog"
 )
 
 // debounceWindow is how long the refresh loop waits after an oplog event to let

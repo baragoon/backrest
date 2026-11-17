@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
 	"go.uber.org/zap"
 )
 
@@ -17,7 +17,7 @@ var conflictingEnvVars = []string{
 
 // migration005CheckRepoPasswords detects repos whose restic password may have
 // been set incorrectly due to a bug fixed in this release
-// (https://github.com/garethgeorge/backrest/issues/1139).
+// (https://github.com/baragoon/backrest/issues/1139).
 //
 // The bug: RESTIC_PASSWORD, RESTIC_PASSWORD_FILE, and RESTIC_PASSWORD_COMMAND
 // inherited from the process environment previously took precedence over the
@@ -89,7 +89,7 @@ var migration005CheckRepoPasswords = func(config *v1.Config) error {
 
 	// Block startup with a detailed error message.
 	var b strings.Builder
-	b.WriteString("IMPORTANT: Backrest detected a potential password conflict affecting your restic repos (see https://github.com/garethgeorge/backrest/issues/1139).\n")
+	b.WriteString("IMPORTANT: Backrest detected a potential password conflict affecting your restic repos (see https://github.com/baragoon/backrest/issues/1139).\n")
 	b.WriteString("\n")
 	b.WriteString("What happened:\n")
 	b.WriteString("  Backrest was using the wrong password for restic repos. The environment variables listed\n")

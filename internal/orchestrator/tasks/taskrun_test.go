@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/internal/oplog"
-	"github.com/garethgeorge/backrest/internal/oplog/sqlitestore"
-	"github.com/garethgeorge/backrest/pkg/restic"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/internal/oplog"
+	"github.com/baragoon/backrest/internal/oplog/sqlitestore"
+	"github.com/baragoon/backrest/pkg/restic"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

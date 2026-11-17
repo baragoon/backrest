@@ -7,9 +7,9 @@ import (
 	"reflect"
 	"time"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/internal/logstore"
-	"github.com/garethgeorge/backrest/internal/oplog"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/internal/logstore"
+	"github.com/baragoon/backrest/internal/oplog"
 	"go.uber.org/zap"
 )
 

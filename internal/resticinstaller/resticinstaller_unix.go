@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/garethgeorge/backrest/internal/env"
+	"github.com/baragoon/backrest/internal/env"
 	"github.com/gofrs/flock"
 	"go.uber.org/zap"
 )

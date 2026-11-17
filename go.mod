@@ -1,4 +1,4 @@
-module github.com/garethgeorge/backrest
+module github.com/baragoon/backrest
 
 go 1.26
 

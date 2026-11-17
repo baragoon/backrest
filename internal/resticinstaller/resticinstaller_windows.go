@@ -8,7 +8,7 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/garethgeorge/backrest/internal/env"
+	"github.com/baragoon/backrest/internal/env"
 	"go.uber.org/zap"
 )
 

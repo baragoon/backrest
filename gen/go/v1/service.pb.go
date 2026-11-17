@@ -7,7 +7,7 @@
 package v1
 
 import (
-	types "github.com/garethgeorge/backrest/gen/go/types"
+	types "github.com/baragoon/backrest/gen/go/types"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -2145,7 +2145,7 @@ const file_v1_service_proto_rawDesc = "" +
 	"\fClearHistory\x12\x17.v1.ClearHistoryRequest\x1a\x16.google.protobuf.Empty\"\x00\x12;\n" +
 	"\x10PathAutocomplete\x12\x12.types.StringValue\x1a\x11.types.StringList\"\x00\x12M\n" +
 	"\x13GetSummaryDashboard\x12\x16.google.protobuf.Empty\x1a\x1c.v1.SummaryDashboardResponse\"\x00\x12[\n" +
-	"\x14GeneratePairingToken\x12\x1f.v1.GeneratePairingTokenRequest\x1a .v1.GeneratePairingTokenResponse\"\x00B,Z*github.com/garethgeorge/backrest/gen/go/v1b\x06proto3"
+	"\x14GeneratePairingToken\x12\x1f.v1.GeneratePairingTokenRequest\x1a .v1.GeneratePairingTokenResponse\"\x00B,Z*github.com/baragoon/backrest/gen/go/v1b\x06proto3"
 
 var (
 	file_v1_service_proto_rawDescOnce sync.Once

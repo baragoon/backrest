@@ -13,11 +13,11 @@ import (
 	"sync"
 	"time"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/internal/cryptoutil"
-	"github.com/garethgeorge/backrest/internal/orchestrator/logging"
-	"github.com/garethgeorge/backrest/internal/protoutil"
-	"github.com/garethgeorge/backrest/pkg/restic"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/internal/cryptoutil"
+	"github.com/baragoon/backrest/internal/orchestrator/logging"
+	"github.com/baragoon/backrest/internal/protoutil"
+	"github.com/baragoon/backrest/pkg/restic"
 	"github.com/google/shlex"
 	"go.uber.org/zap"
 )

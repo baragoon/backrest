@@ -5,9 +5,9 @@ package main
 import (
 	"testing"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/internal/oplog"
-	"github.com/garethgeorge/backrest/internal/oplog/memstore"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/internal/oplog"
+	"github.com/baragoon/backrest/internal/oplog/memstore"
 )
 
 func newTestOpLog(t *testing.T) *oplog.OpLog {

@@ -104,8 +104,8 @@ archives:
 dockers_v2:
   - id: alpine
     images:
-      - "garethgeorge/backrest"
-      - "ghcr.io/garethgeorge/backrest"
+      - "baragoon/backrest"
+      - "ghcr.io/baragoon/backrest"
     tags:
       - latest
       - latest-alpine
@@ -130,8 +130,8 @@ dockers_v2:
 
   - id: scratch
     images:
-      - garethgeorge/backrest
-      - ghcr.io/garethgeorge/backrest
+      - baragoon/backrest
+      - ghcr.io/baragoon/backrest
     tags:
       - scratch
       - v{{ .Major }}-scratch
@@ -156,10 +156,10 @@ brews:
   - name: backrest
     ids:
       - default
-    homepage: https://github.com/garethgeorge/backrest
+    homepage: https://github.com/baragoon/backrest
     description: "Backrest is a web UI and orchestrator for restic backup."
 
-    url_template: "https://github.com/garethgeorge/backrest/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    url_template: "https://github.com/baragoon/backrest/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
 
     commit_author:
       name: goreleaserbot

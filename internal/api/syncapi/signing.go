@@ -8,8 +8,8 @@ import (
 	"hash"
 	"time"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/internal/cryptoutil"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/internal/cryptoutil"
 )
 
 const maxSignatureAge = 5 * time.Minute

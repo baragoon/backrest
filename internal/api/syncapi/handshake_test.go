@@ -4,8 +4,8 @@ import (
 	"crypto/rand"
 	"testing"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/internal/cryptoutil"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/internal/cryptoutil"
 )
 
 func newTestIdentity(t *testing.T) *cryptoutil.PrivateKey {

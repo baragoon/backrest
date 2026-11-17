@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"sync"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/internal/config/migrations"
-	"github.com/garethgeorge/backrest/internal/cryptoutil"
-	"github.com/garethgeorge/backrest/internal/eventemitter"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/internal/config/migrations"
+	"github.com/baragoon/backrest/internal/cryptoutil"
+	"github.com/baragoon/backrest/internal/eventemitter"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )

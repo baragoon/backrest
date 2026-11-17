@@ -908,7 +908,7 @@ export const App: React.FC = () => {
 
         <Flex align="baseline" gap={4}>
           <Link
-            href="https://github.com/garethgeorge/backrest"
+            href="https://github.com/baragoon/backrest"
             target="_blank"
             color="whiteAlpha.700"
             fontSize="xs"

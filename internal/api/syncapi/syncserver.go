@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/gen/go/v1sync"
-	"github.com/garethgeorge/backrest/gen/go/v1sync/v1syncconnect"
-	"github.com/garethgeorge/backrest/internal/api/syncapi/permissions"
-	"github.com/garethgeorge/backrest/internal/env"
-	"github.com/garethgeorge/backrest/internal/oplog"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/gen/go/v1sync"
+	"github.com/baragoon/backrest/gen/go/v1sync/v1syncconnect"
+	"github.com/baragoon/backrest/internal/api/syncapi/permissions"
+	"github.com/baragoon/backrest/internal/env"
+	"github.com/baragoon/backrest/internal/oplog"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )

@@ -48,7 +48,7 @@ Install() {
     tempdir=$(mktemp -d)
     cd "${tempdir}"
     echo -e  "${Info} Downloading Latest Version..."
-    wget https://github.com/garethgeorge/backrest/releases/latest/download/backrest_Linux_${arch}.tar.gz
+    wget https://github.com/baragoon/backrest/releases/latest/download/backrest_Linux_${arch}.tar.gz
     rm -r ./backrest
     mkdir ./backrest
     tar -xzvf backrest_Linux_${arch}.tar.gz -C ./backrest
@@ -65,7 +65,7 @@ Uninstall(){
     tempdir=$(mktemp -d)
     cd "${tempdir}"
     echo -e "${Info} Downloading Latest Version of uninstaller..."
-    wget https://github.com/garethgeorge/backrest/releases/latest/download/backrest_Linux_${arch}.tar.gz
+    wget https://github.com/baragoon/backrest/releases/latest/download/backrest_Linux_${arch}.tar.gz
     rm -r ./backrest
     mkdir ./backrest
     tar -xzvf backrest_Linux_${arch}.tar.gz -C ./backrest

@@ -9,12 +9,12 @@ import (
 	"runtime"
 	"strings"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/internal/hook/hookutil"
-	"github.com/garethgeorge/backrest/internal/ioutil"
-	"github.com/garethgeorge/backrest/internal/orchestrator/logging"
-	"github.com/garethgeorge/backrest/internal/orchestrator/tasks"
-	"github.com/garethgeorge/backrest/internal/platformutil"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/internal/hook/hookutil"
+	"github.com/baragoon/backrest/internal/ioutil"
+	"github.com/baragoon/backrest/internal/orchestrator/logging"
+	"github.com/baragoon/backrest/internal/orchestrator/tasks"
+	"github.com/baragoon/backrest/internal/platformutil"
 	"github.com/google/shlex"
 )
 

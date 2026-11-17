@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/internal/config/migrations"
-	"github.com/garethgeorge/backrest/internal/cryptoutil"
-	"github.com/garethgeorge/backrest/internal/oplog"
-	"github.com/garethgeorge/backrest/internal/testutil"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/internal/config/migrations"
+	"github.com/baragoon/backrest/internal/cryptoutil"
+	"github.com/baragoon/backrest/internal/oplog"
+	"github.com/baragoon/backrest/internal/testutil"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 

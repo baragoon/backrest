@@ -5,9 +5,9 @@ import (
 	"context"
 	"io"
 
-	"github.com/garethgeorge/backrest/internal/ioutil"
-	"github.com/garethgeorge/backrest/internal/orchestrator/logging"
-	"github.com/garethgeorge/backrest/pkg/restic"
+	"github.com/baragoon/backrest/internal/ioutil"
+	"github.com/baragoon/backrest/internal/orchestrator/logging"
+	"github.com/baragoon/backrest/pkg/restic"
 )
 
 // pipeResticLogsToWriter sets the restic logger to write to the provided writer.

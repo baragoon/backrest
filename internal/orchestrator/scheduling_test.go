@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/internal/config"
-	"github.com/garethgeorge/backrest/internal/cryptoutil"
-	"github.com/garethgeorge/backrest/internal/orchestrator/tasks"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/internal/config"
+	"github.com/baragoon/backrest/internal/cryptoutil"
+	"github.com/baragoon/backrest/internal/orchestrator/tasks"
 )
 
 type testTask struct {

@@ -6,11 +6,11 @@ import (
 	"slices"
 	"strings"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/internal/api/syncapi/permissions"
-	"github.com/garethgeorge/backrest/internal/config/validationutil"
-	"github.com/garethgeorge/backrest/internal/cryptoutil"
-	"github.com/garethgeorge/backrest/internal/protoutil"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/internal/api/syncapi/permissions"
+	"github.com/baragoon/backrest/internal/config/validationutil"
+	"github.com/baragoon/backrest/internal/cryptoutil"
+	"github.com/baragoon/backrest/internal/protoutil"
 	"github.com/hashicorp/go-multierror"
 	"go.uber.org/zap"
 )

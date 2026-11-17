@@ -1,5 +1,5 @@
 #define B "Backrest"
-#define Website "https://github.com/garethgeorge/backrest/"
+#define Website "https://github.com/baragoon/backrest/"
 ; The following is needed to extract the version from the change log.
 ; If the application executable had the version info, then could use built-in GetVersion* functions.
 #define fHandle FileOpen("CHANGELOG.md")

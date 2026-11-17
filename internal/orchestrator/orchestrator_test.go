@@ -3,9 +3,9 @@ package orchestrator
 import (
 	"testing"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/internal/config"
-	"github.com/garethgeorge/backrest/internal/resticinstaller"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/internal/config"
+	"github.com/baragoon/backrest/internal/resticinstaller"
 )
 
 func TestAutoInitializeRepos(t *testing.T) {

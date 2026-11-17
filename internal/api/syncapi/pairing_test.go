@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	v1 "github.com/garethgeorge/backrest/gen/go/v1"
-	"github.com/garethgeorge/backrest/gen/go/v1sync"
-	"github.com/garethgeorge/backrest/internal/config/migrations"
-	"github.com/garethgeorge/backrest/internal/cryptoutil"
-	"github.com/garethgeorge/backrest/internal/testutil"
+	v1 "github.com/baragoon/backrest/gen/go/v1"
+	"github.com/baragoon/backrest/gen/go/v1sync"
+	"github.com/baragoon/backrest/internal/config/migrations"
+	"github.com/baragoon/backrest/internal/cryptoutil"
+	"github.com/baragoon/backrest/internal/testutil"
 )
 
 func TestValidatePairingSecret(t *testing.T) {
