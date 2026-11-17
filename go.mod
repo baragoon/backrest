@@ -3,7 +3,7 @@ module github.com/baragoon/backrest
 go 1.26.0
 
 require (
-	al.essio.dev/pkg/shellescape v1.6.0
+	al.essio.dev/pkg/shellescape v1.6.1
 	connectrpc.com/connect v1.20.0
 	fyne.io/systray v1.12.2
 	github.com/djherbis/buffer v1.2.0
