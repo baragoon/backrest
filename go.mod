@@ -1,6 +1,6 @@
 module github.com/baragoon/backrest
 
-go 1.27
+go 1.27.4
 
 require (
 	al.essio.dev/pkg/shellescape v1.6.1
