@@ -2156,7 +2156,7 @@ const file_v1sync_syncservice_proto_rawDesc = "" +
 	"\x04Sync\x12\x16.v1sync.SyncStreamItem\x1a\x16.v1sync.SyncStreamItem\"\x00(\x010\x012\xd4\x01\n" +
 	"\x18BackrestSyncStateService\x12P\n" +
 	"\x17GetPeerSyncStatesStream\x12\x1e.v1sync.SyncStateStreamRequest\x1a\x11.v1sync.PeerState\"\x000\x01\x12f\n" +
-	"\x15SetRemoteClientConfig\x12$.v1sync.SetRemoteClientConfigRequest\x1a%.v1sync.SetRemoteClientConfigResponse\"\x00B0Z.github.com/baragoon/backrest/gen/go/v1syncb\x06proto3"
+	"\x15SetRemoteClientConfig\x12$.v1sync.SetRemoteClientConfigRequest\x1a%.v1sync.SetRemoteClientConfigResponse\"\x00B,Z*github.com/baragoon/backrest/gen/go/v1syncb\x06proto3"
 
 var (
 	file_v1sync_syncservice_proto_rawDescOnce sync.Once

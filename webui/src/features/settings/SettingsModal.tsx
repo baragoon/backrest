@@ -1175,12 +1175,7 @@ const UserSettingsForm = () => {
 
   return (
     <Field
-      label={
-        // @ts-ignore
-        m.settings_field_language
-          ? m.settings_field_language()
-          : m.settings_field_language()
-      }
+      label={m.settings_field_language()}
     >
       <SelectRoot
         collection={languageOptions}

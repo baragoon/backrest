@@ -12,12 +12,12 @@ import (
 type TaskCancelledError struct {
 }
 
-func (e TaskCancelledError) Error() string {
+func (*TaskCancelledError) Error() string {
 	return "task cancelled"
 }
 
-func (e TaskCancelledError) Is(err error) bool {
-	_, ok := err.(TaskCancelledError)
+func (*TaskCancelledError) Is(err error) bool {
+	_, ok := err.(*TaskCancelledError)
 	return ok
 }
 
@@ -29,11 +29,11 @@ type TaskRetryError struct {
 	Backoff RetryBackoffPolicy
 }
 
-func (e TaskRetryError) Error() string {
+func (e *TaskRetryError) Error() string {
 	return fmt.Sprintf("retry: %v", e.Err.Error())
 }
 
-func (e TaskRetryError) Unwrap() error {
+func (e *TaskRetryError) Unwrap() error {
 	return e.Err
 }
 
