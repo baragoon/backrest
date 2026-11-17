@@ -51,7 +51,7 @@
     "@google/generative-ai": "0.24.1",
     "@inlang/cli": "3.6.0",
     "@inlang/paraglide-js": "2.29.3",
-    "@inlang/sdk": "2.7.0",
+    "@inlang/sdk": "2.10.2",
     "@lix-js/client": "2.2.1",
     "@playwright/test": "1.65.1",
     "@testing-library/dom": "10.4.2",
