@@ -173,24 +173,25 @@ jobs:
 
       - name: Resolve latest restic version
         shell: powershell
-        id: restic-version
+        id: restic_version
         run: |
            $latest = Invoke-RestMethod -Uri "https://api.github.com/repos/restic/restic/releases/latest"
            $tag = $latest.tag_name
            if ($tag.StartsWith("v")) {
              $tag = $tag.Substring(1)
            }
+           echo "version=$tag" >> $env:GITHUB_OUTPUT
            echo "RESTIC_VERSION=$tag" >> $env:GITHUB_ENV
 
       - name: Cache restic
-        id: cache-restic
+        id: cache_restic
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: restic-bin
-          key: restic-windows-${{ env.RESTIC_VERSION }}
+          key: restic-windows-${{ steps.restic_version.outputs.version }}
 
       - name: Download restic
-        if: steps.cache-restic.outputs.cache-hit != 'true'
+        if: steps.cache_restic.outputs.cache-hit != 'true'
         shell: powershell
         run: |
            $tag = $env:RESTIC_VERSION
