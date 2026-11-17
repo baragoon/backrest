@@ -4,7 +4,7 @@ go 1.27.4
 
 require (
 	al.essio.dev/pkg/shellescape v1.6.1
-	connectrpc.com/connect/v2 v2.0.2
+	connectrpc.com/connect v1.21.1
 	connectrpc.com/connect/v2 v2.0.2
 	fyne.io/systray v1.12.2
 	github.com/djherbis/buffer v1.2.1
@@ -22,7 +22,7 @@ require (
 	github.com/natefinch/atomic v1.0.1
 	github.com/ncruces/go-sqlite3 v0.37.0
 	github.com/ncruces/zenity v0.10.15
-	github.com/nicholas-fedor/shoutrrr v0.24.0
+	github.com/nicholas-fedor/shoutrrr v0.25.0
 	github.com/pkg/sftp v1.13.12
 	github.com/prometheus/client_golang v1.25.0
 	github.com/stretchr/testify v1.12.1
