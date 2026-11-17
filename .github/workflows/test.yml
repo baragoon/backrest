@@ -108,13 +108,13 @@ jobs:
       # Keyed on the file that pins RequiredResticVersion; global-setup
       # provisions restic into this directory on a cache miss.
       - name: Cache restic
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: webui/e2e/.cache/restic-data
           key: restic-e2e-${{ hashFiles('internal/resticinstaller/resticinstaller.go') }}
 
       - name: Cache playwright browsers
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ hashFiles('webui/pnpm-lock.yaml') }}
@@ -126,7 +126,7 @@ jobs:
       # e2e spec skips itself if rclone is absent, so provision it for coverage.
       - name: Cache rclone
         id: cache-rclone
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: webui/e2e/.cache/rclone-bin
           key: rclone-${{ env.E2E_RCLONE_VERSION }}
@@ -184,7 +184,7 @@ jobs:
 
       - name: Cache restic
         id: cache-restic
-        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: restic-bin
           key: restic-windows-${{ env.RESTIC_VERSION }}
