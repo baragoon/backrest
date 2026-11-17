@@ -31,7 +31,7 @@ require (
 	go.uber.org/zap v1.28.0
 	golang.org/x/crypto v0.59.0
 	golang.org/x/crypto/openpgp v0.1.0-deprecated
-	golang.org/x/net v0.62.0
+	golang.org/x/net v0.63.0
 	golang.org/x/sync v0.25.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20261116203732-fd2c7689a808
 	google.golang.org/grpc v1.85.0
