@@ -1,5 +1,71 @@
 # Changelog
 
+## [1.15.0](https://github.com/baragoon/backrest/compare/v1.14.1...v1.15.0) (2026-11-17)
+
+
+### Features
+
+* add regex manager for tracking rclone version in E2E workflow ([4e564cb](https://github.com/baragoon/backrest/commit/4e564cb704ad504588c044c96b87e4082d3b11da))
+
+
+### Bug Fixes
+
+* address failures on latest main ([ee95bde](https://github.com/baragoon/backrest/commit/ee95bde8082aa113ed97e9e37cba75482341238c))
+* build mac binary with correct minimum macos version ([#1316](https://github.com/baragoon/backrest/issues/1316)) ([af429d1](https://github.com/baragoon/backrest/commit/af429d125abca48eb439873f95f67df205c50180))
+* change macOS app bundle runner to self-hosted ([94e695e](https://github.com/baragoon/backrest/commit/94e695e8a6ce47ff123553e15680f3e5920780d0))
+* change macOS app bundle runner to self-hosted ([47a0f2c](https://github.com/baragoon/backrest/commit/47a0f2caab690df9705fff8453c65c5fedf8fceb))
+* check compressed WebUI index in E2E ([59e8cc4](https://github.com/baragoon/backrest/commit/59e8cc4ac731496d885e286908894abe2f0e3ed1))
+* constrain recharts update range ([8d23fe9](https://github.com/baragoon/backrest/commit/8d23fe9ec0b7d19639038499cb5d4bf8b741a59a))
+* **deps:** replace dependency framer-motion with motion ([654e14e](https://github.com/baragoon/backrest/commit/654e14efa5e3ddd87c8ee5c1f454054f2023631e))
+* **deps:** replace dependency framer-motion with motion ([fda9702](https://github.com/baragoon/backrest/commit/fda97025e9ee0a115c040861d6f930dd4e06299d))
+* **deps:** update dependency motion to v14 ([f9b3154](https://github.com/baragoon/backrest/commit/f9b315403af32ce7a868549332dc6e226e53fa13))
+* **deps:** update dependency motion to v14 ([b02ce2a](https://github.com/baragoon/backrest/commit/b02ce2a8e94ba09c7fdd87362e92b7f8d826e68f))
+* **deps:** update dependency react-js-cron to v6 ([0adef79](https://github.com/baragoon/backrest/commit/0adef799d38c3cfcbac3c94125b659e730dbb037))
+* **deps:** update dependency react-js-cron to v6 ([abcb1c5](https://github.com/baragoon/backrest/commit/abcb1c53c3bf6207358870c35f99b5b7d755255d))
+* **deps:** update dependency react-virtualized to v10 ([b83f993](https://github.com/baragoon/backrest/commit/b83f993635fd2a6fa6f36b82b440afcc60a761db))
+* **deps:** update dependency react-virtualized to v10 ([8f76451](https://github.com/baragoon/backrest/commit/8f764517d369349abe85199754316184f13c36ee))
+* **deps:** update google.golang.org/genproto/googleapis/api digest to fd2c768 ([52fd8cc](https://github.com/baragoon/backrest/commit/52fd8cc143a5fa7bceac95352a5cc82f543a3eee))
+* **deps:** update google.golang.org/genproto/googleapis/api digest to fd2c768 ([932c9fd](https://github.com/baragoon/backrest/commit/932c9fdec10934e8421d703d6a0b4ae6bd87d7d7))
+* **deps:** update module al.essio.dev/pkg/shellescape to v1.6.1 ([c70b7b1](https://github.com/baragoon/backrest/commit/c70b7b1c7c3ed514fbc32707fcfe594ff381a297))
+* **deps:** update module al.essio.dev/pkg/shellescape to v1.6.1 ([123bd3a](https://github.com/baragoon/backrest/commit/123bd3a9422aee2726d7d5d43192fb598ae2d151))
+* **deps:** update module connectrpc.com/connect to v1.21.1 ([044e51a](https://github.com/baragoon/backrest/commit/044e51ac6d73a384b927c62634b10217e990d4f6))
+* **deps:** update module connectrpc.com/connect to v1.21.1 ([55ca16d](https://github.com/baragoon/backrest/commit/55ca16d9e79054e18b5804b7c5d85982227ffe9c))
+* **deps:** update module connectrpc.com/connect to v2 ([e08798b](https://github.com/baragoon/backrest/commit/e08798b118fae6c85a426dea1abf405e94e7e3b6))
+* **deps:** update module connectrpc.com/connect to v2 ([e96a4a8](https://github.com/baragoon/backrest/commit/e96a4a8384853782d62f2cbc9345fd4f84d0d1b9))
+* **deps:** update module connectrpc.com/connect to v2 ([0b1a937](https://github.com/baragoon/backrest/commit/0b1a93760c30a5b07d35683e1240b197b9ed366d))
+* **deps:** update module connectrpc.com/connect to v2 ([68d996f](https://github.com/baragoon/backrest/commit/68d996f15798a1121a878c4f33711f582d424470))
+* **deps:** update module github.com/djherbis/buffer to v1.2.1 ([56a8416](https://github.com/baragoon/backrest/commit/56a84163085886325b545b02952e2eac4174bc11))
+* **deps:** update module github.com/djherbis/buffer to v1.2.1 ([bd7a3da](https://github.com/baragoon/backrest/commit/bd7a3dae1c57cb59e4ac1b50b49a1a4cf1e63f0a))
+* **deps:** update module github.com/gofrs/flock to v0.13.2 ([133ab1b](https://github.com/baragoon/backrest/commit/133ab1b2b51a1e334306ff69228ef4ced5a6c736))
+* **deps:** update module github.com/gofrs/flock to v0.13.2 ([8b8c01c](https://github.com/baragoon/backrest/commit/8b8c01ccdb037b63324e01443376e75fa62edea5))
+* **deps:** update module github.com/mattn/go-colorable to v0.1.16 ([43a7f46](https://github.com/baragoon/backrest/commit/43a7f463509d0fb082547916fcedc9bb5b4de80c))
+* **deps:** update module github.com/mattn/go-colorable to v0.1.16 ([dd3f6ce](https://github.com/baragoon/backrest/commit/dd3f6ce31affe68b40f331eb74c2476c900ac08b))
+* **deps:** update module github.com/ncruces/go-sqlite3 to v0.37.0 ([a2cc219](https://github.com/baragoon/backrest/commit/a2cc219b6d50be1ff0e173a3adeba7f57c046914))
+* **deps:** update module github.com/ncruces/go-sqlite3 to v0.37.0 ([600dbf3](https://github.com/baragoon/backrest/commit/600dbf3fe14f3a780cadf93070b586f89a5af09d))
+* **deps:** update module github.com/ncruces/zenity to v0.10.15 ([c3f3b77](https://github.com/baragoon/backrest/commit/c3f3b77e2a568ecf6cb246d0dbf4c52eefd33c87))
+* **deps:** update module github.com/ncruces/zenity to v0.10.15 ([389248d](https://github.com/baragoon/backrest/commit/389248d23d5a35d4e355582f3b131b3ce84a58f6))
+* **deps:** update module github.com/nicholas-fedor/shoutrrr to v0.24.0 ([523ba76](https://github.com/baragoon/backrest/commit/523ba76c4d30fa6a6c026d7e1d71faa31b873062))
+* **deps:** update module github.com/nicholas-fedor/shoutrrr to v0.24.0 ([88d84aa](https://github.com/baragoon/backrest/commit/88d84aa892887451b3c8c43a082d9981dc0d07bf))
+* **deps:** update module github.com/pkg/sftp to v1.13.12 ([d7d4bd6](https://github.com/baragoon/backrest/commit/d7d4bd6a57288d81086fe3c698aeeab97761fd7d))
+* **deps:** update module github.com/pkg/sftp to v1.13.12 ([5c27e65](https://github.com/baragoon/backrest/commit/5c27e656ec843562c05f7b02e7f198679fb1bd2d))
+* **deps:** update module github.com/prometheus/client_golang to v1.25.0 ([f3b58f2](https://github.com/baragoon/backrest/commit/f3b58f29d5e4eb4093d164b52836e6327dcde018))
+* **deps:** update module github.com/prometheus/client_golang to v1.25.0 ([a41588f](https://github.com/baragoon/backrest/commit/a41588f94cb0ab177894545c94a118a478440f6c))
+* **deps:** update module google.golang.org/grpc to v1.85.0 ([75806fb](https://github.com/baragoon/backrest/commit/75806fb2d176553aafaa405b72fb741ff2900299))
+* **deps:** update module google.golang.org/grpc to v1.85.0 ([7ae2b44](https://github.com/baragoon/backrest/commit/7ae2b448c4af2b54b800c2c4198857ef73671824))
+* exit after printing version ([#1294](https://github.com/baragoon/backrest/issues/1294)) ([8afbd30](https://github.com/baragoon/backrest/commit/8afbd30743936297ddbc875479ec09e15b58becb))
+* i18n move hardcoded texts to inlang messages ([#1318](https://github.com/baragoon/backrest/issues/1318)) ([dfba211](https://github.com/baragoon/backrest/commit/dfba211b6430c8eec602d80b8c166e0ce5d266c7))
+* put status text in disabled menu item on macos ([#1317](https://github.com/baragoon/backrest/issues/1317)) ([869f23a](https://github.com/baragoon/backrest/commit/869f23a9067194a7d294cf843ecb4ca36bc9e569))
+* quit tray on graceful shutdown ([#1295](https://github.com/baragoon/backrest/issues/1295)) ([fd8b2b2](https://github.com/baragoon/backrest/commit/fd8b2b2df44fbf9da72f9364a67a7326e06f3ffe))
+* resolve workflow test failures ([405c4ac](https://github.com/baragoon/backrest/commit/405c4acce55d8fe01972f1b06e65ac5385545785))
+* resolve workflow test failures ([71ad852](https://github.com/baragoon/backrest/commit/71ad852029910e08941f2ec6db87254c3ed2bb11))
+* rm deprecated import github.com/ncruces/go-sqlite3/embed ([#1293](https://github.com/baragoon/backrest/issues/1293)) ([626156c](https://github.com/baragoon/backrest/commit/626156cd8e15745b84bfe86099457d9db8372c5d))
+* simplified workaround to long polling connection limits, avoids issues with suspended tabs on mobile ([148ba12](https://github.com/baragoon/backrest/commit/148ba12c12a7a4fef6d3c6c8e675ca2c5e7d3635))
+* swap to hashicorp/cronexpr for backend cronexpr parsing which supports more syntax ([3dc2825](https://github.com/baragoon/backrest/commit/3dc28258f790c2184641b3f3475b1748cd3f3204))
+* update framer-motion import path in SummaryDashboard.tsx ([1e4f6b4](https://github.com/baragoon/backrest/commit/1e4f6b43610eaa2b09867f7641d6cfd0b2b89e53))
+* update language settings and message structure in TranslationProject class ([7b50886](https://github.com/baragoon/backrest/commit/7b50886738237701ab14d0bd76d114ee6624c065))
+* update renovate configuration to extend best practices ([21f69f8](https://github.com/baragoon/backrest/commit/21f69f8dcf24f570e59639fd469cfa6f59c3fafb))
+* update token reference in release-please workflow and improve variable naming in test workflow ([a7a56a4](https://github.com/baragoon/backrest/commit/a7a56a42f0bbcead4803d8849a8b3e36db372e0c))
+
 ## [1.14.1](https://github.com/baragoon/backrest/compare/v1.14.0...v1.14.1) (2026-07-12)
 
 
