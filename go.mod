@@ -4,7 +4,7 @@ go 1.27.4
 
 require (
 	al.essio.dev/pkg/shellescape v1.6.1
-	connectrpc.com/connect/v2 v2.0.2
+	connectrpc.com/connect v1.21.1
 	connectrpc.com/connect/v2 v2.0.2
 	fyne.io/systray v1.12.2
 	github.com/djherbis/buffer v1.2.1

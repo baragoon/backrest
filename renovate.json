@@ -3,6 +3,17 @@
   "extends": [
     "config:best-practices"
   ],
+  "packageRules": [
+    {
+      "description": "Defer ConnectRPC major upgrades until generated Go clients are migrated",
+      "matchPackageNames": [
+        "connectrpc.com/connect",
+        "connectrpc.com/connect/v2"
+      ],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    }
+  ],
   "customManagers": [
     {
       "customType": "regex",
