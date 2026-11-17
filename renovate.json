@@ -2,5 +2,19 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:best-practices"
+  ],
+  "regexManagers": [
+    {
+      "description": "Track the rclone version used by the E2E workflow",
+      "fileMatch": [
+        "^\\.github/workflows/.*\\.ya?ml$"
+      ],
+      "matchStrings": [
+        "E2E_RCLONE_VERSION:\\s*['\"]?(?<currentValue>v?\\d+\\.\\d+\\.\\d+)['\"]?"
+      ],
+      "depNameTemplate": "rclone/rclone",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "loose"
+    }
   ]
 }
