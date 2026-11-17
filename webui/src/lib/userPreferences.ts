@@ -3,13 +3,14 @@ import {
   getLocale,
   setLocale,
   locales,
+  type Locale,
   // @ts-ignore
 } from "../paraglide/runtime";
 
 const STORAGE_KEY = "PARAGLIDE_LOCALE";
 
 interface UserPreferences {
-  language: string;
+  language: Locale;
 }
 
 const defaultPreferences: UserPreferences = {
@@ -21,17 +22,14 @@ export const useUserPreferences = () => {
     language: getLocale(),
   }));
 
-  const updatePreference = <K extends keyof UserPreferences>(
-    key: K,
-    value: UserPreferences[K],
-  ) => {
+  const updatePreference = (key: "language", value: Locale) => {
     setPreferences((prev) => {
       const next = { ...prev, [key]: value };
       return next;
     });
 
     if (key === "language") {
-      setLocale(value as string, { reload: false });
+      setLocale(value, { reload: false });
     }
   };
 
