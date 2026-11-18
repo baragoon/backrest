@@ -13,6 +13,9 @@ function run(args) {
 }
 
 const translationStatus = run(['tsx', 'scripts/translate-gemini.ts', ...process.argv.slice(2)]);
+
+// Compile translations regardless of translation status so messages saved during
+// partial runs are reflected in src/paraglide/. Report failure if either step failed.
 const compilationStatus = run([
   'paraglide-js',
   'compile',
