@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.0](https://github.com/baragoon/backrest/compare/v1.15.1...v1.16.0) (2026-11-18)
+
+
+### Features
+
+* enhance release workflows with tag validation and improved input handling ([1b19241](https://github.com/baragoon/backrest/commit/1b192417b8fafe2aaf54fda016c363cdd82333a5))
+
 ## [1.15.1](https://github.com/baragoon/backrest/compare/v1.15.0...v1.15.1) (2026-11-18)
 
 
