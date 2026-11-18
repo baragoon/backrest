@@ -91,3 +91,6 @@ services:
     restart: unless-stopped
 ```
 :::
+
+Existing Docker Hub users should [migrate to GHCR](https://github.com/baragoon/backrest#migrating-from-docker-hub)
+to continue receiving image updates.

@@ -9,7 +9,6 @@
 <p align="center">
   <img src="https://github.com/baragoon/backrest/actions/workflows/test.yml/badge.svg" />
   <img src="https://img.shields.io/github/downloads/baragoon/backrest/total" />
-  <img src="https://img.shields.io/docker/pulls/baragoon/backrest" />
 </p>
 
 ---
@@ -30,7 +29,7 @@ Built with Go, Backrest is distributed as a standalone, lightweight binary with 
   - macOS
   - Windows
   - FreeBSD
-  - [Docker](https://hub.docker.com/r/baragoon/backrest)
+  - [Docker](https://github.com/baragoon/backrest/pkgs/container/backrest)
 - **Backup Management**:
   - Import existing restic repositories
   - Cron-scheduled backups and maintenance (e.g. prune, check, forget, etc)
@@ -133,6 +132,20 @@ services:
       - "9898:9898"
     restart: unless-stopped
 ```
+
+### Migrating from Docker Hub
+
+Docker Hub images no longer receive updates. In your Compose file, change
+`baragoon/backrest` to `ghcr.io/baragoon/backrest`, keeping your existing tag
+(for example, `latest` or `scratch`). Ensure your configuration and data are
+stored in bind mounts or volumes, then run:
+
+```sh
+docker compose pull backrest
+docker compose up -d --no-deps --force-recreate backrest
+```
+
+These commands recreate the container without removing its volumes.
 
 ## Windows
 
