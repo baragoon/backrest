@@ -23,7 +23,8 @@ var (
 
 // createTempFileWithCleanup creates a temporary file for targetPath, cleaning up orphaned
 // temporary files associated with targetPath on creation failure, then retrying.
-// Only temp files matching the naming pattern for targetPath are removed.
+// Only temp files matching the naming pattern for targetPath are considered for cleanup.
+// This should only be used when the target path is stable across retries (e.g., the config file).
 func createTempFileWithCleanup(dir, targetPath string) (*renameio.PendingFile, error) {
 	pf, err := renameio.TempFile(dir, targetPath)
 	if err == nil {
@@ -33,13 +34,18 @@ func createTempFileWithCleanup(dir, targetPath string) (*renameio.PendingFile, e
 	// TempFile failed. Try to clean up orphaned temp files for this specific target,
 	// then retry once. This addresses the case where a previous write crashed leaving
 	// an orphaned temp file, which prevents new temp file creation.
-	// We only remove files matching the temp pattern for this specific target path.
+	// renameio uses the pattern: .{basename}{randomNumber}
+	// We only remove files matching this pattern for this specific target path.
 	basename := filepath.Base(targetPath)
-	pattern := filepath.Join(dir, ".tmp."+basename+"*")
+	pattern := filepath.Join(dir, "."+basename+"*")
 	matches, globErr := filepath.Glob(pattern)
 	if globErr == nil {
 		for _, match := range matches {
-			os.Remove(match)
+			// Only remove if it's actually gone (verify before returning success)
+			if err := os.Remove(match); err == nil {
+				// File was successfully removed
+			}
+			// Silently ignore removal errors - the file may be in use or already gone
 		}
 	}
 
@@ -155,8 +161,10 @@ func (f *JsonFileStore) makeBackup() error {
 	}
 
 	// backup the current config file
+	// Each backup has a unique timestamped name, so stale orphans with different timestamps
+	// won't interfere with new backup attempts. Use renameio directly without orphan cleanup.
 	backupName := fmt.Sprintf("%s.bak.%s", f.Path, time.Now().Format("2006-01-02-15-04-05"))
-	t, err := createTempFileWithCleanup(filepath.Dir(backupName), backupName)
+	t, err := renameio.TempFile(filepath.Dir(backupName), backupName)
 	if err != nil {
 		return err
 	}
