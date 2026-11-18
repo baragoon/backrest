@@ -293,15 +293,38 @@ class GeminiClient {
       if (!remaining.delete(String(typedItem.id))) {
         throw new Error('Unexpected or duplicate result ID');
       }
+      
+      // Validate item against the schema's item definition
+      if (schema.items) {
+        if (schema.items.oneOf) {
+          // For oneOf schemas (review results), validate against one of the options
+          this.validateOneOf(item as unknown, schema.items.oneOf);
+        } else if (schema.items.properties) {
+          // For simple object schemas (translation items), validate required fields
+          this.validateItemFields(typedItem, schema.items as JsonSchema);
+        }
+      }
     }
     if (remaining.size > 0) {
       throw new Error('Missing result IDs');
     }
-    // Basic validation for array schemas with oneOf items (for review results)
-    if (schema.type === 'array' && Array.isArray(parsed)) {
-      if (schema.items?.oneOf) {
-        for (const item of parsed) {
-          this.validateOneOf(item as unknown, schema.items.oneOf);
+  }
+
+  private validateItemFields(item: Record<string, unknown>, schema: JsonSchema): void {
+    if (!schema.properties || !schema.required) {
+      return;
+    }
+    for (const field of schema.required) {
+      if (!(field in item)) {
+        throw new Error(`Missing required field: ${field}`);
+      }
+      const fieldDef = schema.properties[field];
+      if (fieldDef?.type) {
+        const actualType = Array.isArray(item[field]) ? 'array' : typeof item[field];
+        if (actualType !== fieldDef.type) {
+          throw new Error(
+            `Invalid type for field ${field}: expected ${fieldDef.type}, got ${actualType}`
+          );
         }
       }
     }
