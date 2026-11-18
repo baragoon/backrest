@@ -83,7 +83,7 @@ pnpm run translate-reprocess
 
 - Both `translate` and `translate-reprocess` send a request schema via `responseJsonSchema`. Locally, both require an array with exactly one result per requested ID; `translate` performs no further local item schema check.
 - The reprocess request schema uses `oneOf` for `{id, ok: true}` or `{id, newTranslation, explanation}`. Local checks verify required fields, the approval enum, and exclusion of mixed approval/correction fields; they do not implement full JSON Schema validation. Results containing `newTranslation` are selected as suggestions.
-- If either `pnpm run translate` or `pnpm run translate-reprocess` saves partial results and exits with status 1, its chained compile step does not run. Run `pnpm run compile-i18n` from `webui` to reflect those saved messages in `src/paraglide/` before using the UI.
+- Both `pnpm run translate` and `pnpm run translate-reprocess` automatically compile saved messages to `src/paraglide/` after each run, regardless of exit status. This ensures partial results from interrupted runs are reflected in the UI without requiring manual compilation. The script's exit code (0 or 1) indicates overall translation success but does not affect compilation.
 
 <!-- /coderabbit-ai-generated:v1 -->
 
