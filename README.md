@@ -91,19 +91,6 @@ The service runs as your user by default (so config and data live under your `$H
 > [!TIP]
 > Review [install.sh](./install.sh) before piping it into a shell. You can also clone the repo and run `./install.sh` locally; it accepts the same flags.
 
-### macOS — Homebrew (alternative)
-
-[Homebrew tap](https://github.com/garethgeorge/homebrew-backrest-tap):
-
-```sh
-brew tap garethgeorge/homebrew-backrest-tap
-brew install backrest
-brew services start backrest
-```
-
-> [!NOTE]
-> You may need to grant Full Disk Access to Backrest. Go to `System Preferences > Security & Privacy > Privacy > Full Disk Access` and add `/usr/local/bin/backrest`.
-
 ### Arch Linux (AUR)
 
 [Backrest on AUR](https://aur.archlinux.org/packages/backrest) is third-party (not maintained by the Backrest project) and tweaks the systemd unit; see the [AUR service file](https://aur.archlinux.org/cgit/aur.git/tree/backrest@.service?h=backrest) for details.
@@ -115,7 +102,7 @@ sudo systemctl enable --now backrest@$USER.service
 
 ## Docker
 
-Image: `ghcr.io/baragoon/backrest` (also on [Docker Hub](https://hub.docker.com/r/baragoon/backrest)).
+Image: `ghcr.io/baragoon/backrest`.
 - Includes rclone and common Unix utilities
 - For a minimal image, use `ghcr.io/baragoon/backrest:scratch`
 

@@ -1,18 +1,44 @@
-name: Tagged Release
+name: Publish v1.15.0 images
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   packages: write
 
 jobs:
-  call-reusable-release:
-    uses: ./.github/workflows/reusable-release.yml
-    with:
-      snapshot: false
-    secrets: inherit
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: v1.15.0
+          fetch-depth: 0
+      - name: Prepare publishing configuration
+        run: |
+          git show "${{ github.sha }}:.goreleaser.yaml" > "$RUNNER_TEMP/goreleaser.yaml"
+          printf '\n  disable: true\n' >> "$RUNNER_TEMP/goreleaser.yaml"
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5
+        with:
+          go-version: "1.27.4"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "26.13.1"
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
+        with:
+          version: 12.21.0
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean --config ${{ runner.temp }}/goreleaser.yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
