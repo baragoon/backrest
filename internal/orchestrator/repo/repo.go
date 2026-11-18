@@ -24,173 +24,212 @@ import (
 
 // parseFlagArgs parses flag arguments with comment and escaped-space handling
 // compatible with the previous shlex-based behavior.
-// - Removes unquoted comments (text after # outside quotes)
+// - Removes unquoted comments (text after # outside quotes, through the next newline)
 // - Treats unquoted CRLF as whitespace before splitting
-// - Unescapes backslash-escaped spaces only within double-quoted arguments
-// - Preserves literal backslashes in single-quoted arguments
+// - Unescapes backslash-escaped spaces only within double-quoted fragments
+// - Preserves literal backslashes in single-quoted fragments
 func parseFlagArgs(input string) ([]string, error) {
-	// First pass: remove comments and normalize CRLF while preserving # inside quotes
-	// Note: backslashes only escape outside quotes and in double quotes.
-	// Inside single quotes, backslashes are literal and do not escape anything.
-	commentPos := -1
+	// First pass: normalize CRLF and strip comments that occur at word boundaries
+	// A comment is an unquoted # that appears at input start or after whitespace
 	escaped := false
 	doubleQuoted := false
 	singleQuoted := false
 	var normalized strings.Builder
+	lastCharWasWhitespace := true // Start of input acts like whitespace for comment detection
 
-	for i, ch := range input {
+	i := 0
+	for i < len(input) {
+		ch := rune(input[i])
 		if escaped {
 			normalized.WriteRune(ch)
 			escaped = false
+			lastCharWasWhitespace = false
+			i++
 			continue
 		}
+
 		// Backslashes only escape outside quotes and in double quotes
 		if ch == '\\' && !singleQuoted {
 			normalized.WriteRune(ch)
 			escaped = true
+			lastCharWasWhitespace = false
+			i++
 			continue
 		}
+
 		if ch == '"' && !singleQuoted {
 			doubleQuoted = !doubleQuoted
 			normalized.WriteRune(ch)
+			lastCharWasWhitespace = false
+			i++
 			continue
 		}
+
 		if ch == '\'' && !doubleQuoted {
 			singleQuoted = !singleQuoted
 			normalized.WriteRune(ch)
+			lastCharWasWhitespace = false
+			i++
 			continue
 		}
-		if ch == '#' && !doubleQuoted && !singleQuoted {
-			commentPos = i
+
+		// Comment: unquoted # at word boundary (after whitespace or at start)
+		if ch == '#' && !doubleQuoted && !singleQuoted && lastCharWasWhitespace {
+			// Skip through the end of this line, then resume parsing
+			j := i + 1
+			for j < len(input) && input[j] != '\n' {
+				j++
+			}
+			// If we found a newline, include it and continue parsing after it
+			if j < len(input) && input[j] == '\n' {
+				normalized.WriteRune('\n')
+				i = j + 1
+				lastCharWasWhitespace = true
+				continue
+			}
+			// Comment extends to end of input, stop here
 			break
 		}
+
 		// Treat unquoted CR as whitespace (part of CRLF normalization)
 		if ch == '\r' && !doubleQuoted && !singleQuoted {
 			normalized.WriteRune(' ')
+			lastCharWasWhitespace = true
+			i++
 			continue
 		}
+
+		// Track if we're at whitespace (for next iteration's comment detection)
+		isWhitespace := !doubleQuoted && !singleQuoted && (ch == ' ' || ch == '\t' || ch == '\n')
+		if isWhitespace {
+			lastCharWasWhitespace = true
+		} else {
+			lastCharWasWhitespace = false
+		}
+
 		normalized.WriteRune(ch)
+		i++
 	}
 
 	input = normalized.String()
 
-	// Re-detect comment in normalized input (since positions may have shifted due to CR normalization)
-	commentPos = -1
-	escaped = false
-	doubleQuoted = false
-	singleQuoted = false
-	for i, ch := range input {
-		if escaped {
-			escaped = false
-			continue
-		}
-		if ch == '\\' && !singleQuoted {
-			escaped = true
-			continue
-		}
-		if ch == '"' && !singleQuoted {
-			doubleQuoted = !doubleQuoted
-			continue
-		}
-		if ch == '\'' && !doubleQuoted {
-			singleQuoted = !singleQuoted
-			continue
-		}
-		if ch == '#' && !doubleQuoted && !singleQuoted {
-			commentPos = i
-			break
-		}
-	}
-
-	// Strip comment if found
-	if commentPos >= 0 {
-		input = input[:commentPos]
-	}
-
-	// Split arguments
+	// Split arguments (this uses space, tab, and newline as separators)
 	args, err := shellquote.Split(input)
 	if err != nil {
 		return nil, err
 	}
 
-	// Second pass: scan original input to track which parts were double-quoted
-	// vs single-quoted. This determines whether to unescape \ spaces.
-	// Note: backslashes only escape in double quotes and outside quotes.
-	// Inside single quotes, backslashes are literal.
-	type argInfo struct {
-		inDouble bool
-		inSingle bool
+	// Second pass: scan through the input to track which arguments came from
+	// double-quoted regions and may contain escaped spaces that should be unescaped.
+	// We need to map each split argument back to its source regions to determine
+	// whether it had double-quoted fragments.
+
+	type regionInfo struct {
+		argIndex   int    // which split arg this region belongs to
+		inDouble   bool   // whether this region was double-quoted
+		startPos   int    // position in input where this region starts
+		endPos     int    // position in input where this region ends
+		hasEscSp   bool   // whether this region contains \ followed by space
 	}
 
-	argRanges := []argInfo{}
+	regions := []regionInfo{}
 	escaped = false
 	doubleQuoted = false
 	singleQuoted = false
-	var currentArg strings.Builder
-	hadDouble := false
-	hadSingle := false
+	currentArgIndex := 0
+	regionStart := 0
 
-	for _, ch := range input {
+	for i, ch := range input {
 		if escaped {
-			currentArg.WriteRune(ch)
 			escaped = false
 			continue
 		}
-
-		// Backslashes only escape outside quotes and in double quotes
 		if ch == '\\' && !singleQuoted {
-			currentArg.WriteRune(ch)
 			escaped = true
 			continue
 		}
-
 		if ch == '"' && !singleQuoted {
 			doubleQuoted = !doubleQuoted
-			if doubleQuoted {
-				hadDouble = true
-			}
-			currentArg.WriteRune(ch)
 			continue
 		}
-
 		if ch == '\'' && !doubleQuoted {
 			singleQuoted = !singleQuoted
-			if singleQuoted {
-				hadSingle = true
-			}
-			currentArg.WriteRune(ch)
 			continue
 		}
-
-		// Whitespace outside quotes ends argument
-		if !doubleQuoted && !singleQuoted && (ch == ' ' || ch == '\t') {
-			if currentArg.Len() > 0 {
-				argRanges = append(argRanges, argInfo{
-					inDouble: hadDouble,
-					inSingle: hadSingle,
+		if !doubleQuoted && !singleQuoted && (ch == ' ' || ch == '\t' || ch == '\n') {
+			if i > regionStart {
+				// End current region and argument
+				regionText := input[regionStart:i]
+				hasEscSp := strings.Contains(regionText, `\ `)
+				regions = append(regions, regionInfo{
+					argIndex: currentArgIndex,
+					inDouble: false, // Will be corrected below
+					startPos: regionStart,
+					endPos:   i,
+					hasEscSp: hasEscSp,
 				})
-				currentArg.Reset()
-				hadDouble = false
-				hadSingle = false
+				currentArgIndex++
 			}
-			continue
+			regionStart = i + 1
 		}
-
-		currentArg.WriteRune(ch)
 	}
-
-	// Don't forget the last argument
-	if currentArg.Len() > 0 {
-		argRanges = append(argRanges, argInfo{
-			inDouble: hadDouble,
-			inSingle: hadSingle,
+	if regionStart < len(input) {
+		regionText := input[regionStart:]
+		hasEscSp := strings.Contains(regionText, `\ `)
+		regions = append(regions, regionInfo{
+			argIndex: currentArgIndex,
+			inDouble: false,
+			startPos: regionStart,
+			endPos:   len(input),
+			hasEscSp: hasEscSp,
 		})
 	}
 
-	// Map split arguments back to their source quote context.
-	// Only unescape \ spaces for arguments that were in double quotes.
+	// Second scan to mark which regions were inside double quotes
+	escaped = false
+	doubleQuoted = false
+	singleQuoted = false
+	regionIdx := 0
+	for i, ch := range input {
+		if regionIdx >= len(regions) {
+			break
+		}
+		if i == regions[regionIdx].startPos && i < regions[regionIdx].endPos {
+			// We're in this region, record if we're double-quoted
+			regions[regionIdx].inDouble = doubleQuoted
+		}
+		if i == regions[regionIdx].endPos && regionIdx+1 < len(regions) {
+			regionIdx++
+		}
+
+		if escaped {
+			escaped = false
+			continue
+		}
+		if ch == '\\' && !singleQuoted {
+			escaped = true
+			continue
+		}
+		if ch == '"' && !singleQuoted {
+			doubleQuoted = !doubleQuoted
+			continue
+		}
+		if ch == '\'' && !doubleQuoted {
+			singleQuoted = !singleQuoted
+			continue
+		}
+	}
+
+	// Now unescape \ spaces only for arguments that have double-quoted regions with escaped spaces
+	argHasDoubleQuoteWithEscSp := make(map[int]bool)
+	for _, region := range regions {
+		if region.inDouble && region.hasEscSp {
+			argHasDoubleQuoteWithEscSp[region.argIndex] = true
+		}
+	}
+
 	for i, arg := range args {
-		if i < len(argRanges) && argRanges[i].inDouble && strings.Contains(arg, `\ `) {
+		if argHasDoubleQuoteWithEscSp[i] && strings.Contains(arg, `\ `) {
 			args[i] = strings.ReplaceAll(arg, `\ `, " ")
 		}
 	}
