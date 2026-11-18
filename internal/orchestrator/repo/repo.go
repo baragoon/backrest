@@ -152,7 +152,25 @@ func parseFlagArgs(input string) ([]string, error) {
 			continue
 		}
 
-		if ch == '\\' && !sq2 {
+		if ch == '\\' {
+			// In single quotes, backslash is literal
+			if sq2 {
+				currentArg.WriteByte(ch)
+				currentArgQuoteMap = append(currentArgQuoteMap, positionInfo{inDouble: dq2, inSingle: sq2})
+				continue
+			}
+			// In double quotes, backslash only escapes: $ ` " \ and newline
+			// For other characters, preserve the backslash
+			if dq2 && i+1 < len(input) {
+				nextCh := input[i+1]
+				if nextCh != '$' && nextCh != '`' && nextCh != '"' && nextCh != '\\' && nextCh != '\n' {
+					// Not an escapable character in double quotes; preserve backslash
+					currentArg.WriteByte(ch)
+					currentArgQuoteMap = append(currentArgQuoteMap, positionInfo{inDouble: dq2, inSingle: sq2})
+					continue
+				}
+			}
+			// Outside quotes or escaping a special character; mark for escape processing
 			esc2 = true
 			continue
 		}

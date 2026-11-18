@@ -25,6 +25,10 @@ func TestParseFlagArgsCompatibility(t *testing.T) {
 		// Edge cases from review comments
 		{`--config=/path#1.conf`, []string{`--config=/path#1.conf`}}, // embedded hash not at word boundary
 		{`'single\ text'"double"`, []string{`single\ textdouble`}},   // mixed quotes preserve single-quoted space
+		// Windows paths with backslashes (not escapable in POSIX double quotes)
+		{`"C:\Users\backup"`, []string{`C:\Users\backup`}},
+		{`--path="C:\Program Files\App"`, []string{`--path=C:\Program Files\App`}},
+		{`"\\\\server\\share"`, []string{`\\server\share`}},
 	} {
 		got, err := parseFlagArgs(tc.input)
 		if err != nil || !reflect.DeepEqual(got, tc.want) {
