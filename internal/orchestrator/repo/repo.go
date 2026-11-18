@@ -42,8 +42,7 @@ func parseFlagArgs(input string) ([]string, error) {
 		if escaped {
 			normalized.WriteByte(ch)
 			escaped = false
-			// Don't update lastCharWasWhitespace here; preserve the state
-			// from before the escaping backslash
+			lastCharWasWhitespace = false
 			i++
 			continue
 		}
@@ -64,8 +63,7 @@ func parseFlagArgs(input string) ([]string, error) {
 		if ch == '\\' && !singleQuoted {
 			normalized.WriteByte(ch)
 			escaped = true
-			// Don't change lastCharWasWhitespace yet; keep the current state
-			// so that after the escape sequence, we maintain the word boundary
+			// The escaped character will establish a word boundary state.
 			i++
 			continue
 		}
@@ -194,6 +192,10 @@ func parseFlagArgs(input string) ([]string, error) {
 
 		currentArg.WriteByte(ch)
 		currentArgQuoteMap = append(currentArgQuoteMap, positionInfo{inDouble: dq2, inSingle: sq2})
+	}
+
+	if dq2 || sq2 || esc2 {
+		return nil, errors.New("unfinished quote or escape in flag arguments")
 	}
 
 	// Don't forget the last argument

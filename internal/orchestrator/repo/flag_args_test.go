@@ -19,9 +19,12 @@ func TestParseFlagArgsCompatibility(t *testing.T) {
 		{`  first   "two\ words"`, []string{"first", "two words"}},
 		{`""  ''  "two\ words"`, []string{"", "", "two words"}},
 		{`"two  spaces"  "three\ words"`, []string{"two  spaces", "three words"}},
+		{`\ #literal`, []string{" #literal"}},
+		{`foo \ #literal`, []string{"foo", " #literal"}},
+		{`\x#literal`, []string{"x#literal"}},
 		// Edge cases from review comments
 		{`--config=/path#1.conf`, []string{`--config=/path#1.conf`}}, // embedded hash not at word boundary
-		{`'single\ text'"double"`, []string{`single\ textdouble`}}, // mixed quotes preserve single-quoted space
+		{`'single\ text'"double"`, []string{`single\ textdouble`}},   // mixed quotes preserve single-quoted space
 	} {
 		got, err := parseFlagArgs(tc.input)
 		if err != nil || !reflect.DeepEqual(got, tc.want) {
@@ -30,3 +33,10 @@ func TestParseFlagArgsCompatibility(t *testing.T) {
 	}
 }
 
+func TestParseFlagArgsUnfinishedSyntax(t *testing.T) {
+	for _, input := range []string{`"`, `'`, `\`, `foo "bar`, `foo 'bar`, `foo\`, `""\`, `ok '' "`} {
+		if got, err := parseFlagArgs(input); err == nil {
+			t.Errorf("parseFlagArgs(%q) = %q without error", input, got)
+		}
+	}
+}

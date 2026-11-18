@@ -220,9 +220,9 @@ If you prefer not to use Nix, install the following manually:
 - [Go](https://go.dev/) 1.24 or greater
 <!-- coderabbit-ai-generated:v1 -->
 
-<!-- coderabbit-ai-generated-section:v1:f188484edd75536bac2faedefb93b60da2a12cac486c2bc5f726718f60a24cc4 -->
+<!-- coderabbit-ai-generated-section:v1:8de5c9990ffccb7230da2648aa1f2dd5603f4bd704f29bfb553b138129f9e9cd -->
 
-- [Node.js](https://nodejs.org/en) 22.12.0 or greater and [pnpm](https://pnpm.io/) 11
+- [Node.js](https://nodejs.org/en) 22.13.0 or greater and [pnpm](https://pnpm.io/) 11
 
 <!-- /coderabbit-ai-generated:v1 -->
 - [goreleaser](https://github.com/goreleaser/goreleaser) `go install github.com/goreleaser/goreleaser/v2@latest`
