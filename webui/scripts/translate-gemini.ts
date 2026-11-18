@@ -91,7 +91,7 @@ const reprocessSchema = {
         type: 'object',
         properties: {
           id: { type: 'string' },
-          ok: { type: 'boolean' },
+          ok: { type: 'boolean', enum: [true] },
         },
         required: ['id', 'ok'],
       },
@@ -254,7 +254,11 @@ class GeminiClient {
         });
         const text = result.text;
         if (!text) throw new Error('Empty response from Gemini API');
-        return JSON.parse(text) as T;
+        const parsed = JSON.parse(text) as T;
+        // Validate the parsed result against the schema to catch API responses
+        // that don't strictly adhere to the generated schema
+        this.validateResult(parsed, schema);
+        return parsed;
       } catch (err: any) {
         lastErr = err;
         if (attempt === MAX_RETRIES) break;
@@ -264,6 +268,45 @@ class GeminiClient {
       }
     }
     throw lastErr;
+  }
+
+  private validateResult(parsed: any, schema: any): void {
+    // Basic validation for array schemas with oneOf items (for review results)
+    if (schema.type === 'array' && Array.isArray(parsed)) {
+      if (schema.items?.oneOf) {
+        for (const item of parsed) {
+          this.validateOneOf(item, schema.items.oneOf);
+        }
+      }
+    }
+  }
+
+  private validateOneOf(item: any, oneOfSchemas: any[]): void {
+    for (const schema of oneOfSchemas) {
+      if (this.matchesSchema(item, schema)) {
+        return; // Valid
+      }
+    }
+    throw new Error(`Item does not match any schema in oneOf: ${JSON.stringify(item)}`);
+  }
+
+  private matchesSchema(obj: any, schema: any): boolean {
+    if (schema.properties) {
+      const required = schema.required || [];
+      for (const field of required) {
+        if (!(field in obj)) {
+          return false;
+        }
+        // Check enum constraints if present
+        if (schema.properties[field]?.enum) {
+          if (!schema.properties[field].enum.includes(obj[field])) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+    return false;
   }
 
   private translatePrompt(lang: string, items: TranslationItem[]): string {

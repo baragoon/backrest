@@ -119,26 +119,20 @@ func parseFlagArgs(input string) ([]string, error) {
 		return nil, err
 	}
 
-	// Second pass: scan through the input to track which arguments came from
-	// double-quoted regions and may contain escaped spaces that should be unescaped.
-	// We need to map each split argument back to its source regions to determine
-	// whether it had double-quoted fragments.
-
-	type regionInfo struct {
-		argIndex int  // which split arg this region belongs to
-		inDouble bool // whether this region was double-quoted
-		startPos int  // position in input where this region starts
-		endPos   int  // position in input where this region ends
-		hasEscSp bool // whether this region contains \ followed by space
-	}
-
-	regions := []regionInfo{}
+	// Second pass: for each argument, track which of its fragments were double-quoted
+	// to determine whether escaped spaces in that argument should be unescaped.
+	// An argument may have mixed quotes like 'single'"double", so we need per-fragment tracking.
+	
+	argHasDoubleQuoteWithEscSp := make(map[int]bool)
+	
 	escaped = false
 	doubleQuoted = false
 	singleQuoted = false
 	currentArgIndex := 0
-	regionStart := 0
-
+	argStart := 0
+	argHasDoubleQuote := false
+	argHasEscSp := false
+	
 	for i, ch := range input {
 		if escaped {
 			escaped = false
@@ -146,9 +140,17 @@ func parseFlagArgs(input string) ([]string, error) {
 		}
 		if ch == '\\' && !singleQuoted {
 			escaped = true
+			// Track if we have an escaped space inside double quotes
+			if doubleQuoted && i+1 < len(input) && input[i+1] == ' ' {
+				argHasEscSp = true
+			}
 			continue
 		}
 		if ch == '"' && !singleQuoted {
+			if !doubleQuoted {
+				// Entering double quotes
+				argHasDoubleQuote = true
+			}
 			doubleQuoted = !doubleQuoted
 			continue
 		}
@@ -157,77 +159,22 @@ func parseFlagArgs(input string) ([]string, error) {
 			continue
 		}
 		if !doubleQuoted && !singleQuoted && (ch == ' ' || ch == '\t' || ch == '\n') {
-			if i > regionStart {
-				// End current region and argument
-				regionText := input[regionStart:i]
-				hasEscSp := strings.Contains(regionText, `\ `)
-				regions = append(regions, regionInfo{
-					argIndex: currentArgIndex,
-					inDouble: false, // Will be corrected below
-					startPos: regionStart,
-					endPos:   i,
-					hasEscSp: hasEscSp,
-				})
-				currentArgIndex++
+			// End of argument
+			if i > argStart && argHasDoubleQuote && argHasEscSp {
+				argHasDoubleQuoteWithEscSp[currentArgIndex] = true
 			}
-			regionStart = i + 1
+			currentArgIndex++
+			argStart = i + 1
+			argHasDoubleQuote = false
+			argHasEscSp = false
 		}
 	}
-	if regionStart < len(input) {
-		regionText := input[regionStart:]
-		hasEscSp := strings.Contains(regionText, `\ `)
-		regions = append(regions, regionInfo{
-			argIndex: currentArgIndex,
-			inDouble: false,
-			startPos: regionStart,
-			endPos:   len(input),
-			hasEscSp: hasEscSp,
-		})
+	// Handle last argument
+	if argStart < len(input) && argHasDoubleQuote && argHasEscSp {
+		argHasDoubleQuoteWithEscSp[currentArgIndex] = true
 	}
-
-	// Second scan to mark which regions were inside double quotes
-	escaped = false
-	doubleQuoted = false
-	singleQuoted = false
-	regionIdx := 0
-	for i, ch := range input {
-		if regionIdx >= len(regions) {
-			break
-		}
-		if i == regions[regionIdx].startPos && i < regions[regionIdx].endPos {
-			// We're in this region, record if we're double-quoted
-			regions[regionIdx].inDouble = doubleQuoted
-		}
-		if i == regions[regionIdx].endPos && regionIdx+1 < len(regions) {
-			regionIdx++
-		}
-
-		if escaped {
-			escaped = false
-			continue
-		}
-		if ch == '\\' && !singleQuoted {
-			escaped = true
-			continue
-		}
-		if ch == '"' && !singleQuoted {
-			doubleQuoted = !doubleQuoted
-			continue
-		}
-		if ch == '\'' && !doubleQuoted {
-			singleQuoted = !singleQuoted
-			continue
-		}
-	}
-
-	// Now unescape \ spaces only for arguments that have double-quoted regions with escaped spaces
-	argHasDoubleQuoteWithEscSp := make(map[int]bool)
-	for _, region := range regions {
-		if region.inDouble && region.hasEscSp {
-			argHasDoubleQuoteWithEscSp[region.argIndex] = true
-		}
-	}
-
+	
+	// Now unescape \ spaces only for arguments that actually had escaped spaces within double quotes
 	for i, arg := range args {
 		if argHasDoubleQuoteWithEscSp[i] && strings.Contains(arg, `\ `) {
 			args[i] = strings.ReplaceAll(arg, `\ `, " ")
