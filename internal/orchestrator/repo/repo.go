@@ -25,23 +25,65 @@ import (
 // parseFlagArgs parses flag arguments with comment and escaped-space handling
 // compatible with the previous shlex-based behavior.
 // - Removes unquoted comments (text after # outside quotes)
+// - Treats unquoted CRLF as whitespace before splitting
 // - Unescapes backslash-escaped spaces only within double-quoted arguments
 // - Preserves literal backslashes in single-quoted arguments
 func parseFlagArgs(input string) ([]string, error) {
-	// First pass: remove comments while preserving # inside quotes
+	// First pass: remove comments and normalize CRLF while preserving # inside quotes
 	// Note: backslashes only escape outside quotes and in double quotes.
 	// Inside single quotes, backslashes are literal and do not escape anything.
 	commentPos := -1
 	escaped := false
 	doubleQuoted := false
 	singleQuoted := false
+	var normalized strings.Builder
 
+	for i, ch := range input {
+		if escaped {
+			normalized.WriteRune(ch)
+			escaped = false
+			continue
+		}
+		// Backslashes only escape outside quotes and in double quotes
+		if ch == '\\' && !singleQuoted {
+			normalized.WriteRune(ch)
+			escaped = true
+			continue
+		}
+		if ch == '"' && !singleQuoted {
+			doubleQuoted = !doubleQuoted
+			normalized.WriteRune(ch)
+			continue
+		}
+		if ch == '\'' && !doubleQuoted {
+			singleQuoted = !singleQuoted
+			normalized.WriteRune(ch)
+			continue
+		}
+		if ch == '#' && !doubleQuoted && !singleQuoted {
+			commentPos = i
+			break
+		}
+		// Treat unquoted CR as whitespace (part of CRLF normalization)
+		if ch == '\r' && !doubleQuoted && !singleQuoted {
+			normalized.WriteRune(' ')
+			continue
+		}
+		normalized.WriteRune(ch)
+	}
+
+	input = normalized.String()
+
+	// Re-detect comment in normalized input (since positions may have shifted due to CR normalization)
+	commentPos = -1
+	escaped = false
+	doubleQuoted = false
+	singleQuoted = false
 	for i, ch := range input {
 		if escaped {
 			escaped = false
 			continue
 		}
-		// Backslashes only escape outside quotes and in double quotes
 		if ch == '\\' && !singleQuoted {
 			escaped = true
 			continue
@@ -60,12 +102,12 @@ func parseFlagArgs(input string) ([]string, error) {
 		}
 	}
 
-	// Strip comment if found (including at position 0)
+	// Strip comment if found
 	if commentPos >= 0 {
 		input = input[:commentPos]
 	}
 
-	// Split arguments, preserving trailing spaces before split
+	// Split arguments
 	args, err := shellquote.Split(input)
 	if err != nil {
 		return nil, err
