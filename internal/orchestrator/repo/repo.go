@@ -25,12 +25,15 @@ import (
 // parseFlagArgs parses flag arguments with comment and escaped-space handling
 // compatible with the previous shlex-based behavior.
 // - Removes unquoted comments (text after # outside quotes)
-// - Unescapes backslash-escaped spaces within double quotes
+// - Unescapes backslash-escaped spaces only within double-quoted arguments
+// - Preserves literal backslashes in single-quoted arguments
 func parseFlagArgs(input string) ([]string, error) {
-	// Remove comments: find # outside of quotes
-	var commentPos int
-	inQuote := false
+	// First pass: remove comments while preserving # inside quotes
+	commentPos := -1
 	escaped := false
+	doubleQuoted := false
+	singleQuoted := false
+
 	for i, ch := range input {
 		if escaped {
 			escaped = false
@@ -40,28 +43,106 @@ func parseFlagArgs(input string) ([]string, error) {
 			escaped = true
 			continue
 		}
-		if ch == '"' {
-			inQuote = !inQuote
+		if ch == '"' && !singleQuoted {
+			doubleQuoted = !doubleQuoted
 			continue
 		}
-		if ch == '#' && !inQuote {
+		if ch == '\'' && !doubleQuoted {
+			singleQuoted = !singleQuoted
+			continue
+		}
+		if ch == '#' && !doubleQuoted && !singleQuoted {
 			commentPos = i
 			break
 		}
 	}
-	if commentPos > 0 {
+
+	// Strip comment if found (including at position 0)
+	if commentPos >= 0 {
 		input = input[:commentPos]
 	}
 
-	// Split arguments
-	args, err := shellquote.Split(strings.TrimSpace(input))
+	// Split arguments, preserving trailing spaces before split
+	args, err := shellquote.Split(input)
 	if err != nil {
 		return nil, err
 	}
 
-	// Unescape backslash-escaped spaces within double-quoted arguments
+	// Second pass: scan original input to track which parts were double-quoted
+	// vs single-quoted. This determines whether to unescape \ spaces.
+	type argInfo struct {
+		inDouble bool
+		inSingle bool
+	}
+
+	argRanges := []argInfo{}
+	escaped = false
+	doubleQuoted = false
+	singleQuoted = false
+	var currentArg strings.Builder
+	hadDouble := false
+	hadSingle := false
+
+	for _, ch := range input {
+		if escaped {
+			currentArg.WriteRune(ch)
+			escaped = false
+			continue
+		}
+
+		if ch == '\\' {
+			currentArg.WriteRune(ch)
+			escaped = true
+			continue
+		}
+
+		if ch == '"' && !singleQuoted {
+			doubleQuoted = !doubleQuoted
+			if doubleQuoted {
+				hadDouble = true
+			}
+			currentArg.WriteRune(ch)
+			continue
+		}
+
+		if ch == '\'' && !doubleQuoted {
+			singleQuoted = !singleQuoted
+			if singleQuoted {
+				hadSingle = true
+			}
+			currentArg.WriteRune(ch)
+			continue
+		}
+
+		// Whitespace outside quotes ends argument
+		if !doubleQuoted && !singleQuoted && (ch == ' ' || ch == '\t') {
+			if currentArg.Len() > 0 {
+				argRanges = append(argRanges, argInfo{
+					inDouble: hadDouble,
+					inSingle: hadSingle,
+				})
+				currentArg.Reset()
+				hadDouble = false
+				hadSingle = false
+			}
+			continue
+		}
+
+		currentArg.WriteRune(ch)
+	}
+
+	// Don't forget the last argument
+	if currentArg.Len() > 0 {
+		argRanges = append(argRanges, argInfo{
+			inDouble: hadDouble,
+			inSingle: hadSingle,
+		})
+	}
+
+	// Map split arguments back to their source quote context.
+	// Only unescape \ spaces for arguments that were in double quotes.
 	for i, arg := range args {
-		if strings.Contains(arg, `\ `) {
+		if i < len(argRanges) && argRanges[i].inDouble && strings.Contains(arg, `\ `) {
 			args[i] = strings.ReplaceAll(arg, `\ `, " ")
 		}
 	}
