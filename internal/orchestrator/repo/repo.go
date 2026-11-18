@@ -125,11 +125,11 @@ func parseFlagArgs(input string) ([]string, error) {
 	// whether it had double-quoted fragments.
 
 	type regionInfo struct {
-		argIndex   int    // which split arg this region belongs to
-		inDouble   bool   // whether this region was double-quoted
-		startPos   int    // position in input where this region starts
-		endPos     int    // position in input where this region ends
-		hasEscSp   bool   // whether this region contains \ followed by space
+		argIndex int  // which split arg this region belongs to
+		inDouble bool // whether this region was double-quoted
+		startPos int  // position in input where this region starts
+		endPos   int  // position in input where this region ends
+		hasEscSp bool // whether this region contains \ followed by space
 	}
 
 	regions := []regionInfo{}

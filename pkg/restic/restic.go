@@ -15,10 +15,10 @@ import (
 	"sync"
 	"unicode"
 
-	"github.com/djherbis/buffer"
-	nio "github.com/djherbis/nio/v3"
 	"github.com/baragoon/backrest/internal/ioutil"
 	"github.com/baragoon/backrest/internal/platformutil"
+	"github.com/djherbis/buffer"
+	nio "github.com/djherbis/nio/v3"
 	"go.uber.org/zap"
 )
 
@@ -378,7 +378,6 @@ func (r *Repo) Forget(ctx context.Context, policy *RetentionPolicy, opts ...Gene
 
 	return merged, nil
 }
-
 
 func (r *Repo) ForgetSnapshot(ctx context.Context, snapshotId string, opts ...GenericOption) error {
 	args := []string{"forget", "--json", snapshotId}
