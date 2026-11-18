@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.15.1](https://github.com/baragoon/backrest/compare/v1.15.0...v1.15.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* build docs with pnpm lockfile ([792b471](https://github.com/baragoon/backrest/commit/792b4711e39c6e894fd3097ed267f3674909029e))
+* build documentation using pnpm ([1f00a05](https://github.com/baragoon/backrest/commit/1f00a050159e3e5d0b5a4595882d5b2cad34a011))
+* publish release images only to GHCR ([0d62b65](https://github.com/baragoon/backrest/commit/0d62b6544dcfcceae5dcda3707db74c6e8798ece))
+* publish releases to GHCR only ([73accf4](https://github.com/baragoon/backrest/commit/73accf45735b62520d1b0d9c536404aac6a522a5))
+
 ## [1.15.0](https://github.com/baragoon/backrest/compare/v1.14.1...v1.15.0) (2026-11-17)
 
 
