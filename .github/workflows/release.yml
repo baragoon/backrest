@@ -5,6 +5,11 @@ on:
     tags:
       - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag (required when dispatching from a branch)"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -15,4 +20,5 @@ jobs:
     uses: ./.github/workflows/reusable-release.yml
     with:
       snapshot: false
+      tag: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
     secrets: inherit
