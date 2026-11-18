@@ -29,15 +29,17 @@ var (
 // only the owner full access and denies all other access. This is used for
 // temporary files to prevent information disclosure.
 func buildRestrictiveSecurityDescriptor(ownerSID *windows.SID) (*windows.SECURITY_DESCRIPTOR, error) {
-	// Create an empty DACL.
-	acl, err := windows.NewACL(16) // Start with 16-byte capacity
+	// Create an ACL with an explicit grant for the owner.
+	acl, err := windows.ACLFromEntries([]windows.ACLEntry{
+		{
+			AccessMode: windows.GRANT_ACCESS,
+			AccessMask: 0x1f01ff, // Full control
+			Inheritance: windows.NO_INHERITANCE,
+			SID: ownerSID,
+		},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("create ACL: %w", err)
-	}
-
-	// Add an ACE that grants the owner full control (0x1f01ff).
-	if err := acl.GrantSid(0x1f01ff, ownerSID); err != nil {
-		return nil, fmt.Errorf("grant owner access: %w", err)
 	}
 
 	// Create a security descriptor and assign the DACL.
@@ -46,8 +48,14 @@ func buildRestrictiveSecurityDescriptor(ownerSID *windows.SID) (*windows.SECURIT
 		return nil, fmt.Errorf("create security descriptor: %w", err)
 	}
 
+	// Set DACL with protection to prevent inheritance of parent directory permissions.
 	if err := sd.SetDACL(acl, true, false); err != nil {
 		return nil, fmt.Errorf("set DACL: %w", err)
+	}
+
+	// Mark the DACL as protected so inherited permissions don't apply.
+	if err := sd.SetControl(windows.SE_DACL_PROTECTED, windows.SE_DACL_PROTECTED); err != nil {
+		return nil, fmt.Errorf("protect DACL: %w", err)
 	}
 
 	return sd, nil
@@ -65,7 +73,6 @@ func createFileWithSD(path string, sd *windows.SECURITY_DESCRIPTOR) (*os.File, e
 	sa := &windows.SecurityAttributes{
 		Length:             uint32(unsafe.Sizeof(windows.SecurityAttributes{})),
 		SecurityDescriptor: sd,
-		InheritHandle:      false,
 	}
 
 	// Use CreateFile with CREATE_NEW to ensure exclusive creation.
