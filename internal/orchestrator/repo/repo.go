@@ -39,18 +39,30 @@ func parseFlagArgs(input string) ([]string, error) {
 
 	i := 0
 	for i < len(input) {
-		ch := rune(input[i])
+		ch := input[i]
 		if escaped {
-			normalized.WriteRune(ch)
+			normalized.WriteByte(ch)
 			escaped = false
 			lastCharWasWhitespace = false
 			i++
 			continue
 		}
 
+		// Continuations do not begin or end a shell word.
+		if ch == '\\' && !singleQuoted && i+1 < len(input) {
+			if input[i+1] == '\n' {
+				i += 2
+				continue
+			}
+			if !doubleQuoted && input[i+1] == '\r' && i+2 < len(input) && input[i+2] == '\n' {
+				i += 3
+				continue
+			}
+		}
+
 		// Backslashes only escape outside quotes and in double quotes
 		if ch == '\\' && !singleQuoted {
-			normalized.WriteRune(ch)
+			normalized.WriteByte(ch)
 			escaped = true
 			lastCharWasWhitespace = false
 			i++
@@ -59,7 +71,7 @@ func parseFlagArgs(input string) ([]string, error) {
 
 		if ch == '"' && !singleQuoted {
 			doubleQuoted = !doubleQuoted
-			normalized.WriteRune(ch)
+			normalized.WriteByte(ch)
 			lastCharWasWhitespace = false
 			i++
 			continue
@@ -67,7 +79,7 @@ func parseFlagArgs(input string) ([]string, error) {
 
 		if ch == '\'' && !doubleQuoted {
 			singleQuoted = !singleQuoted
-			normalized.WriteRune(ch)
+			normalized.WriteByte(ch)
 			lastCharWasWhitespace = false
 			i++
 			continue
@@ -107,7 +119,7 @@ func parseFlagArgs(input string) ([]string, error) {
 			lastCharWasWhitespace = false
 		}
 
-		normalized.WriteRune(ch)
+		normalized.WriteByte(ch)
 		i++
 	}
 
@@ -123,7 +135,7 @@ func parseFlagArgs(input string) ([]string, error) {
 	// it contains an escaped space that originated in a double-quoted fragment.
 	// We need per-fragment tracking because an argument may combine single- and double-quoted
 	// fragments: 'single\ text'"double" should NOT unescape the space in the single part.
-	
+
 	type argMetadata struct {
 		hasEscSpInDouble bool
 	}
@@ -133,19 +145,21 @@ func parseFlagArgs(input string) ([]string, error) {
 	doubleQuoted = false
 	singleQuoted = false
 	currentArgIndex := 0
+	inWord := false
 
 	// Track whether the current fragment (before the next quote change) has an escaped space in double quotes
 	fragmentHasEscSpInDouble := false
 
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
-		
+
 		if escaped {
 			escaped = false
 			continue
 		}
 
 		if ch == '\\' && !singleQuoted {
+			inWord = true
 			escaped = true
 			// If we're in double quotes and the next char is a space, mark it
 			if doubleQuoted && i+1 < len(input) && input[i+1] == ' ' {
@@ -155,6 +169,7 @@ func parseFlagArgs(input string) ([]string, error) {
 		}
 
 		if ch == '"' && !singleQuoted {
+			inWord = true
 			// Record escaped-space metadata for the fragment we're leaving (if exiting double quotes)
 			if doubleQuoted && fragmentHasEscSpInDouble {
 				// Exiting a double-quoted section that had escaped spaces
@@ -169,14 +184,20 @@ func parseFlagArgs(input string) ([]string, error) {
 		}
 
 		if ch == '\'' && !doubleQuoted {
+			inWord = true
 			singleQuoted = !singleQuoted
 			continue
 		}
 
 		if !doubleQuoted && !singleQuoted && (ch == ' ' || ch == '\t' || ch == '\n') {
-			// End of argument
-			currentArgIndex++
+			// Advance once per completed word, including explicitly empty quotes.
+			if inWord {
+				currentArgIndex++
+			}
+			inWord = false
 			fragmentHasEscSpInDouble = false
+		} else {
+			inWord = true
 		}
 	}
 

@@ -69,6 +69,32 @@ func stripShebangComment(shebang string) string {
 	return shebang
 }
 
+// splitShebang preserves legacy escaped spaces inside double quotes while
+// leaving escaped backslashes and single-quoted text to shellquote.
+func splitShebang(input string) ([]string, error) {
+	var normalized strings.Builder
+	singleQuoted, doubleQuoted := false, false
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+		if ch == '\\' && !singleQuoted && i+1 < len(input) {
+			i++
+			if !doubleQuoted || input[i] != ' ' {
+				normalized.WriteByte(ch)
+			}
+			normalized.WriteByte(input[i])
+			continue
+		}
+		if ch == '\'' && !doubleQuoted {
+			singleQuoted = !singleQuoted
+		}
+		if ch == '"' && !singleQuoted {
+			doubleQuoted = !doubleQuoted
+		}
+		normalized.WriteByte(ch)
+	}
+	return shellquote.Split(normalized.String())
+}
+
 type commandHandler struct{}
 
 func (commandHandler) Name() string {
@@ -99,7 +125,7 @@ func (commandHandler) Execute(ctx context.Context, h *v1.Hook, vars interface{},
 		// Strip trailing comments from shebang: recognize # only at word boundary
 		shebang = stripShebangComment(shebang)
 
-		shell, err = shellquote.Split(shebang)
+		shell, err = splitShebang(shebang)
 		if err != nil {
 			return fmt.Errorf("parsing shell for command: %w", err)
 		} else if len(shell) == 0 {

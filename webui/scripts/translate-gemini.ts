@@ -240,7 +240,7 @@ class GeminiClient {
     this.ai = new GoogleGenAI({ apiKey });
   }
 
-  private async call<T>(prompt: string, schema: any): Promise<T> {
+  private async call<T>(prompt: string, schema: any, expectedIds: string[]): Promise<T> {
     let lastErr: any;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
@@ -257,7 +257,7 @@ class GeminiClient {
         const parsed = JSON.parse(text) as T;
         // Validate the parsed result against the schema to catch API responses
         // that don't strictly adhere to the generated schema
-        this.validateResult(parsed, schema);
+        this.validateResult(parsed, schema, expectedIds);
         return parsed;
       } catch (err: any) {
         lastErr = err;
@@ -270,7 +270,19 @@ class GeminiClient {
     throw lastErr;
   }
 
-  private validateResult(parsed: any, schema: any): void {
+  private validateResult(parsed: any, schema: any, expectedIds: string[]): void {
+    if (!Array.isArray(parsed)) {
+      throw new Error('Expected an array from Gemini API');
+    }
+    const remaining = new Set(expectedIds);
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object' || !remaining.delete(item.id)) {
+        throw new Error('Unexpected or duplicate result ID');
+      }
+    }
+    if (remaining.size > 0) {
+      throw new Error('Missing result IDs');
+    }
     // Basic validation for array schemas with oneOf items (for review results)
     if (schema.type === 'array' && Array.isArray(parsed)) {
       if (schema.items?.oneOf) {
@@ -373,11 +385,11 @@ class GeminiClient {
   }
 
   async translateBatch(lang: string, items: TranslationItem[]): Promise<TranslationResult[]> {
-    return this.call<TranslationResult[]>(this.translatePrompt(lang, items), translationSchema);
+    return this.call<TranslationResult[]>(this.translatePrompt(lang, items), translationSchema, items.map((item) => item.id));
   }
 
   async reviewBatch(lang: string, items: TranslationItem[]): Promise<ReviewResult[]> {
-    return this.call<ReviewResult[]>(this.reviewPrompt(lang, items), reprocessSchema);
+    return this.call<ReviewResult[]>(this.reviewPrompt(lang, items), reprocessSchema, items.map((item) => item.id));
   }
 }
 

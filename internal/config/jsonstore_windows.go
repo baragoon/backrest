@@ -64,9 +64,16 @@ func newWindowsTempWriter(dir, targetPath string, ownerSID *windows.SID) (*windo
 
 		// Apply restrictive DACL: owner has full access (0x1f01ff), everyone else denied.
 		if err := acl.Apply(tempPath, true, false, acl.GrantSid(0x1f01ff, ownerSID)); err != nil {
-			file.Close()
-			os.Remove(tempPath)
-			return nil, fmt.Errorf("set file permissions: %w", err)
+			// FAT and other volumes without ACLs retain the previous writable
+			// file behavior. Never hide access-denied or other ACL failures.
+			if errors.Is(err, windows.ERROR_NOT_SUPPORTED) || errors.Is(err, windows.ERROR_INVALID_FUNCTION) {
+				err = file.Chmod(0600)
+			}
+			if err != nil {
+				file.Close()
+				os.Remove(tempPath)
+				return nil, fmt.Errorf("set file permissions: %w", err)
+			}
 		}
 
 		return &windowsTempWriter{
@@ -87,14 +94,23 @@ func (w *windowsTempWriter) Write(p []byte) (int, error) {
 
 // CloseAtomicallyReplace closes the temporary file and atomically replaces the target.
 func (w *windowsTempWriter) CloseAtomicallyReplace(targetPath string) error {
+	if err := w.file.Sync(); err != nil {
+		return err
+	}
 	if err := w.file.Close(); err != nil {
 		os.Remove(w.tempPath)
 		return err
 	}
 
-	// Atomically replace the target with the temp file using os.Rename.
-	// os.Rename replaces the destination if it exists.
-	if err := os.Rename(w.tempPath, targetPath); err != nil {
+	from, err := windows.UTF16PtrFromString(w.tempPath)
+	if err != nil {
+		return err
+	}
+	to, err := windows.UTF16PtrFromString(targetPath)
+	if err != nil {
+		return err
+	}
+	if err := windows.MoveFileEx(from, to, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH); err != nil {
 		return err
 	}
 

@@ -77,8 +77,16 @@ pnpm run translate-reprocess
 
 **API Behavior:**
 - Request and response schema structure updated to match @google/genai 3.4.0 requirements
-- Both `translate` and `translate-reprocess` commands use `responseJsonSchema` with strict validation
-- The reprocess result schema uses `oneOf` to define two response types: `{id, ok: true}` (unchanged) or `{id, newTranslation, explanation}` (suggestion). The ok field is constrained to true by enum, and the script validates responses match the schema before filtering. The script filters results by checking for the `newTranslation` field; this selects only suggestion entries. Invalid responses that don't match either schema are rejected with an error.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:57fb12e40fc8c94f9bab325b4f9f8faef8edf53069a04c0bd2213620631564b5 -->
+
+- Both `translate` and `translate-reprocess` send a request schema via `responseJsonSchema`. Locally, both require an array with exactly one result per requested ID; `translate` performs no further local item schema check.
+- The reprocess request schema uses `oneOf` for `{id, ok: true}` or `{id, newTranslation, explanation}`. Local checks verify required fields, the approval enum, and exclusion of mixed approval/correction fields; they do not implement full JSON Schema validation. Results containing `newTranslation` are selected as suggestions.
+- If either `pnpm run translate` or `pnpm run translate-reprocess` saves partial results and exits with status 1, its chained compile step does not run. Run `pnpm run compile-i18n` from `webui` to reflect those saved messages in `src/paraglide/` before using the UI.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 - Variable placeholders and error handling updated to match new API response format
 
 The commands should work identically to before the migration.
