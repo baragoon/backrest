@@ -81,7 +81,7 @@ const translationSchema = {
     },
     required: ['id', 'translation'],
   },
-} satisfies any;
+};
 
 const reprocessSchema = {
   type: 'array',

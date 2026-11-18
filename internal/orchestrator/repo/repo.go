@@ -119,64 +119,68 @@ func parseFlagArgs(input string) ([]string, error) {
 		return nil, err
 	}
 
-	// Second pass: for each argument, track which of its fragments were double-quoted
-	// to determine whether escaped spaces in that argument should be unescaped.
-	// An argument may have mixed quotes like 'single'"double", so we need per-fragment tracking.
-
-	argHasDoubleQuoteWithEscSp := make(map[int]bool)
+	// Second pass: scan the input string and for each argument, determine whether
+	// it contains an escaped space that originated in a double-quoted fragment.
+	// We need per-fragment tracking because an argument may combine single- and double-quoted
+	// fragments: 'single\ text'"double" should NOT unescape the space in the single part.
+	
+	type argMetadata struct {
+		hasEscSpInDouble bool
+	}
+	argMeta := make(map[int]*argMetadata)
 
 	escaped = false
 	doubleQuoted = false
 	singleQuoted = false
 	currentArgIndex := 0
-	argStart := 0
-	argHasDoubleQuote := false
-	argHasEscSp := false
 
-	for i, ch := range input {
+	// Track whether the current fragment (before the next quote change) has an escaped space in double quotes
+	fragmentHasEscSpInDouble := false
+
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+		
 		if escaped {
 			escaped = false
 			continue
 		}
+
 		if ch == '\\' && !singleQuoted {
 			escaped = true
-			// Track if we have an escaped space inside double quotes
+			// If we're in double quotes and the next char is a space, mark it
 			if doubleQuoted && i+1 < len(input) && input[i+1] == ' ' {
-				argHasEscSp = true
+				fragmentHasEscSpInDouble = true
 			}
 			continue
 		}
+
 		if ch == '"' && !singleQuoted {
-			if !doubleQuoted {
-				// Entering double quotes
-				argHasDoubleQuote = true
+			if !doubleQuoted && fragmentHasEscSpInDouble {
+				// We're exiting a double-quoted section that had escaped spaces
+				if _, ok := argMeta[currentArgIndex]; !ok {
+					argMeta[currentArgIndex] = &argMetadata{}
+				}
+				argMeta[currentArgIndex].hasEscSpInDouble = true
 			}
 			doubleQuoted = !doubleQuoted
 			continue
 		}
+
 		if ch == '\'' && !doubleQuoted {
 			singleQuoted = !singleQuoted
 			continue
 		}
+
 		if !doubleQuoted && !singleQuoted && (ch == ' ' || ch == '\t' || ch == '\n') {
 			// End of argument
-			if i > argStart && argHasDoubleQuote && argHasEscSp {
-				argHasDoubleQuoteWithEscSp[currentArgIndex] = true
-			}
 			currentArgIndex++
-			argStart = i + 1
-			argHasDoubleQuote = false
-			argHasEscSp = false
+			fragmentHasEscSpInDouble = false
 		}
 	}
-	// Handle last argument
-	if argStart < len(input) && argHasDoubleQuote && argHasEscSp {
-		argHasDoubleQuoteWithEscSp[currentArgIndex] = true
-	}
 
-	// Now unescape \ spaces only for arguments that actually had escaped spaces within double quotes
+	// Now unescape \ spaces only for arguments that had escaped spaces in double-quoted fragments
 	for i, arg := range args {
-		if argHasDoubleQuoteWithEscSp[i] && strings.Contains(arg, `\ `) {
+		if meta, ok := argMeta[i]; ok && meta.hasEscSpInDouble && strings.Contains(arg, `\ `) {
 			args[i] = strings.ReplaceAll(arg, `\ `, " ")
 		}
 	}
