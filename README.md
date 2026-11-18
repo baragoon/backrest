@@ -9,7 +9,6 @@
 <p align="center">
   <img src="https://github.com/baragoon/backrest/actions/workflows/test.yml/badge.svg" />
   <img src="https://img.shields.io/github/downloads/baragoon/backrest/total" />
-  <img src="https://img.shields.io/docker/pulls/baragoon/backrest" />
 </p>
 
 ---
@@ -30,7 +29,7 @@ Built with Go, Backrest is distributed as a standalone, lightweight binary with 
   - macOS
   - Windows
   - FreeBSD
-  - [Docker](https://hub.docker.com/r/baragoon/backrest)
+  - [Docker](https://github.com/baragoon/backrest/pkgs/container/backrest)
 - **Backup Management**:
   - Import existing restic repositories
   - Cron-scheduled backups and maintenance (e.g. prune, check, forget, etc)
@@ -91,19 +90,6 @@ The service runs as your user by default (so config and data live under your `$H
 > [!TIP]
 > Review [install.sh](./install.sh) before piping it into a shell. You can also clone the repo and run `./install.sh` locally; it accepts the same flags.
 
-### macOS — Homebrew (alternative)
-
-[Homebrew tap](https://github.com/garethgeorge/homebrew-backrest-tap):
-
-```sh
-brew tap garethgeorge/homebrew-backrest-tap
-brew install backrest
-brew services start backrest
-```
-
-> [!NOTE]
-> You may need to grant Full Disk Access to Backrest. Go to `System Preferences > Security & Privacy > Privacy > Full Disk Access` and add `/usr/local/bin/backrest`.
-
 ### Arch Linux (AUR)
 
 [Backrest on AUR](https://aur.archlinux.org/packages/backrest) is third-party (not maintained by the Backrest project) and tweaks the systemd unit; see the [AUR service file](https://aur.archlinux.org/cgit/aur.git/tree/backrest@.service?h=backrest) for details.
@@ -115,7 +101,7 @@ sudo systemctl enable --now backrest@$USER.service
 
 ## Docker
 
-Image: `ghcr.io/baragoon/backrest` (also on [Docker Hub](https://hub.docker.com/r/baragoon/backrest)).
+Image: `ghcr.io/baragoon/backrest`.
 - Includes rclone and common Unix utilities
 - For a minimal image, use `ghcr.io/baragoon/backrest:scratch`
 
@@ -146,6 +132,20 @@ services:
       - "9898:9898"
     restart: unless-stopped
 ```
+
+### Migrating from Docker Hub
+
+Docker Hub images no longer receive updates. In your Compose file, change
+`baragoon/backrest` to `ghcr.io/baragoon/backrest`, keeping your existing tag
+(for example, `latest` or `scratch`). Ensure your configuration and data are
+stored in bind mounts or volumes, then run:
+
+```sh
+docker compose pull backrest
+docker compose up -d --no-deps --force-recreate backrest
+```
+
+These commands recreate the container without removing its volumes.
 
 ## Windows
 

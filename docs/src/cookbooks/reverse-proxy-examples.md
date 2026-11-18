@@ -12,7 +12,7 @@ Here is an example docker-compose.yaml:
 version: "3.2"
 services:
   backrest:
-    image: baragoon/backrest
+    image: ghcr.io/baragoon/backrest
     container_name: backrest
     hostname: <YOUR PROXIED FQDN HERE (example: backrest.example.com)>
     volumes:

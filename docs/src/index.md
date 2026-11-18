@@ -59,11 +59,6 @@ sudo systemctl enable --now backrest
 paru -Sy backrest
 sudo systemctl enable --now backrest@$USER.service
 ```
-```bash [MacOS (Homebrew)]
-brew tap garethgeorge/homebrew-backrest-tap
-brew install backrest
-brew services start backrest
-```
 ```bash [MacOS (Script)]
 # Download the latest release from https://github.com/baragoon/backrest/releases
 curl -sLO https://github.com/baragoon/backrest/releases/latest/download/backrest_Darwin_arm64.tar.gz
@@ -96,3 +91,6 @@ services:
     restart: unless-stopped
 ```
 :::
+
+Existing Docker Hub users should [migrate to GHCR](https://github.com/baragoon/backrest#migrating-from-docker-hub)
+to continue receiving image updates.

@@ -85,7 +85,7 @@ Now, edit your `docker-compose.yml` to mount the `backrest/ssh` directory into t
 version: "3.8"
 services:
   backrest:
-    image: baragoon/backrest:latest
+    image: ghcr.io/baragoon/backrest:latest
     container_name: backrest
     # ... other configuration ...
     volumes:
