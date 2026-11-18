@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import {
   loadProjectFromDirectory,
   selectBundleNested,
@@ -69,44 +69,54 @@ type ReviewResult =
   | { id: string; ok: true }
   | { id: string; ok?: false; newTranslation: string; explanation: string };
 
+// JSON Schema type for validation
+interface JsonSchema {
+  type?: string;
+  items?: JsonSchema & { oneOf?: JsonSchema[] };
+  properties?: Record<string, JsonSchema & { enum?: unknown[] }>;
+  required?: string[];
+  enum?: unknown[];
+  oneOf?: JsonSchema[];
+}
+
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
-const translationSchema = {
-  type: SchemaType.ARRAY,
+const translationSchema: JsonSchema = {
+  type: 'array',
   items: {
-    type: SchemaType.OBJECT,
+    type: 'object',
     properties: {
-      id: { type: SchemaType.STRING },
-      translation: { type: SchemaType.STRING },
+      id: { type: 'string' },
+      translation: { type: 'string' },
     },
     required: ['id', 'translation'],
   },
-} as any;
+};
 
-const reprocessSchema = {
-  type: SchemaType.ARRAY,
+const reprocessSchema: JsonSchema = {
+  type: 'array',
   items: {
     oneOf: [
       {
-        type: SchemaType.OBJECT,
+        type: 'object',
         properties: {
-          id: { type: SchemaType.STRING },
-          ok: { type: SchemaType.BOOLEAN },
+          id: { type: 'string' },
+          ok: { type: 'boolean', enum: [true] },
         },
         required: ['id', 'ok'],
       },
       {
-        type: SchemaType.OBJECT,
+        type: 'object',
         properties: {
-          id: { type: SchemaType.STRING },
-          newTranslation: { type: SchemaType.STRING },
-          explanation: { type: SchemaType.STRING },
+          id: { type: 'string' },
+          newTranslation: { type: 'string' },
+          explanation: { type: 'string' },
         },
         required: ['id', 'newTranslation', 'explanation'],
       },
     ],
   },
-} as any;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -234,25 +244,31 @@ async function* createBufferedIterator<T, R>(
 // ─── GeminiClient ─────────────────────────────────────────────────────────────
 
 class GeminiClient {
-  private model: ReturnType<GoogleGenerativeAI['getGenerativeModel']>;
+  private ai: GoogleGenAI;
 
   constructor(apiKey: string) {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    this.model = genAI.getGenerativeModel({ model: MODEL_NAME });
+    this.ai = new GoogleGenAI({ apiKey });
   }
 
-  private async call<T>(prompt: string, schema: any): Promise<T> {
+  private async call<T>(prompt: string, schema: JsonSchema, expectedIds: string[]): Promise<T> {
     let lastErr: any;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const result = await this.model.generateContent({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: {
+        const result = await this.ai.models.generateContent({
+          model: MODEL_NAME,
+          contents: prompt,
+          config: {
             responseMimeType: 'application/json',
-            responseSchema: schema,
+            responseJsonSchema: schema,
           },
         });
-        return JSON.parse(result.response.text()) as T;
+        const text = result.text;
+        if (!text) throw new Error('Empty response from Gemini API');
+        const parsed: unknown = JSON.parse(text);
+        // Validate the parsed result against the schema to catch API responses
+        // that don't strictly adhere to the generated schema
+        this.validateResult(parsed, schema, expectedIds);
+        return parsed as T;
       } catch (err: any) {
         lastErr = err;
         if (attempt === MAX_RETRIES) break;
@@ -262,6 +278,112 @@ class GeminiClient {
       }
     }
     throw lastErr;
+  }
+
+  private validateResult(parsed: unknown, schema: JsonSchema, expectedIds: string[]): void {
+    if (!Array.isArray(parsed)) {
+      throw new Error('Expected an array from Gemini API');
+    }
+    const remaining = new Set(expectedIds);
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object' || !('id' in item)) {
+        throw new Error('Invalid result item: missing id');
+      }
+      const typedItem = item as Record<string, unknown>;
+      if (!remaining.delete(String(typedItem.id))) {
+        throw new Error('Unexpected or duplicate result ID');
+      }
+      
+      // Validate item against the schema's item definition
+      if (schema.items) {
+        if (schema.items.oneOf) {
+          // For oneOf schemas (review results), validate against one of the options
+          this.validateOneOf(item as unknown, schema.items.oneOf);
+        } else if (schema.items.properties) {
+          // For simple object schemas (translation items), validate required fields
+          this.validateItemFields(typedItem, schema.items as JsonSchema);
+        }
+      }
+    }
+    if (remaining.size > 0) {
+      throw new Error('Missing result IDs');
+    }
+  }
+
+  private validateItemFields(item: Record<string, unknown>, schema: JsonSchema): void {
+    if (!schema.properties || !schema.required) {
+      return;
+    }
+    for (const field of schema.required) {
+      if (!(field in item)) {
+        throw new Error(`Missing required field: ${field}`);
+      }
+      const fieldDef = schema.properties[field];
+      if (fieldDef?.type) {
+        const actualType = Array.isArray(item[field]) ? 'array' : typeof item[field];
+        if (actualType !== fieldDef.type) {
+          throw new Error(
+            `Invalid type for field ${field}: expected ${fieldDef.type}, got ${actualType}`
+          );
+        }
+      }
+    }
+  }
+
+  private validateOneOf(item: unknown, oneOfSchemas: JsonSchema[]): void {
+    const matches = oneOfSchemas.filter((schema) => this.matchesSchema(item, schema));
+    if (matches.length !== 1) {
+      throw new Error(
+        `Item must match exactly one schema in oneOf (matched ${matches.length}): ${JSON.stringify(item)}`
+      );
+    }
+  }
+
+  private matchesSchema(obj: unknown, schema: JsonSchema): boolean {
+    if (typeof obj !== 'object' || obj === null) {
+      return false;
+    }
+    if (!schema.properties) {
+      return false;
+    }
+    const typedObj = obj as Record<string, unknown>;
+    const required = schema.required || [];
+    for (const field of required) {
+      if (!(field in typedObj)) {
+        return false;
+      }
+      // Validate field type matches schema
+      const fieldDef = schema.properties[field];
+      if (fieldDef?.type) {
+        const actualType = Array.isArray(typedObj[field]) ? 'array' : typeof typedObj[field];
+        if (actualType !== fieldDef.type) {
+          return false;
+        }
+      }
+      // Check enum constraints if present
+      if (fieldDef?.enum) {
+        if (!fieldDef.enum.includes(typedObj[field])) {
+          return false;
+        }
+      }
+    }
+
+    // Enforce mutual exclusivity: if this is an approval schema (ok: true),
+    // reject items that also have correction fields
+    if (schema.properties.ok && schema.required?.includes('ok')) {
+      if ('newTranslation' in typedObj || 'explanation' in typedObj) {
+        return false;
+      }
+    }
+
+    // If this is a correction schema, reject items that have approval fields
+    if (schema.properties.newTranslation && schema.required?.includes('newTranslation')) {
+      if ('ok' in typedObj) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private translatePrompt(lang: string, items: TranslationItem[]): string {
@@ -304,11 +426,11 @@ class GeminiClient {
   }
 
   async translateBatch(lang: string, items: TranslationItem[]): Promise<TranslationResult[]> {
-    return this.call<TranslationResult[]>(this.translatePrompt(lang, items), translationSchema);
+    return this.call<TranslationResult[]>(this.translatePrompt(lang, items), translationSchema, items.map((item) => item.id));
   }
 
   async reviewBatch(lang: string, items: TranslationItem[]): Promise<ReviewResult[]> {
-    return this.call<ReviewResult[]>(this.reviewPrompt(lang, items), reprocessSchema);
+    return this.call<ReviewResult[]>(this.reviewPrompt(lang, items), reprocessSchema, items.map((item) => item.id));
   }
 }
 
@@ -471,6 +593,12 @@ class TranslationProject {
       throw err;
     }
   }
+
+  close(): void {
+    if (this.project?.close) {
+      this.project.close();
+    }
+  }
 }
 
 // ─── UserReviewer ─────────────────────────────────────────────────────────────
@@ -511,8 +639,9 @@ class UserReviewer {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-async function runTranslate(gemini: GeminiClient, project: TranslationProject): Promise<void> {
+async function runTranslate(gemini: GeminiClient, project: TranslationProject): Promise<number> {
   let totalUpdates = 0;
+  let totalFailed = 0;
 
   const work = buildWork(
     project.targetLangs,
@@ -521,7 +650,7 @@ async function runTranslate(gemini: GeminiClient, project: TranslationProject): 
   );
   if (work.length === 0) {
     console.log('Nothing to translate.');
-    return;
+    return 0;
   }
   console.error(
     `${work.length} batches to translate across ${project.targetLangs.length} languages.`,
@@ -536,6 +665,7 @@ async function runTranslate(gemini: GeminiClient, project: TranslationProject): 
       console.error(
         `\n[${w.lang}] ERROR: batch ${w.batchIndex + 1}/${w.batchCount} failed after retries: ${err.message}`,
       );
+      totalFailed++;
       return [] as TranslationResult[];
     }
   })) {
@@ -552,15 +682,20 @@ async function runTranslate(gemini: GeminiClient, project: TranslationProject): 
   }
 
   console.log(`\nTranslation complete. ${totalUpdates} strings translated.`);
+  if (totalFailed > 0) {
+    console.log(`Warning: ${totalFailed} batches failed.`);
+  }
+  return totalFailed;
 }
 
 async function runReprocess(
   gemini: GeminiClient,
   project: TranslationProject,
   reviewer: UserReviewer,
-): Promise<void> {
+): Promise<number> {
   let totalAccepted = 0;
   let totalSkipped = 0;
+  let totalFailed = 0;
 
   const work = buildWork(
     project.targetLangs,
@@ -569,7 +704,7 @@ async function runReprocess(
   );
   if (work.length === 0) {
     console.log('No existing translations to review.');
-    return;
+    return 0;
   }
   console.error(`Reviewing ${work.length} batches across ${project.targetLangs.length} languages.`);
 
@@ -586,9 +721,18 @@ async function runReprocess(
       console.error(
         `\n[${w.lang}] ERROR: batch ${w.batchIndex + 1}/${w.batchCount} failed after retries: ${err.message}`,
       );
-      return [] as ReviewResult[];
+      return null; // Indicate batch was not reviewed
     }
   })) {
+    // If batch failed, record as unreviewed and skip processing
+    if (result === null) {
+      process.stderr.write(
+        `[${w.lang}] Batch ${w.batchIndex + 1}/${w.batchCount}: unreviewed (failed to fetch).\n`,
+      );
+      totalFailed++;
+      continue;
+    }
+
     const suggestions = result.filter(
       (r): r is { id: string; newTranslation: string; explanation: string } =>
         'newTranslation' in r && !!r.newTranslation,
@@ -629,7 +773,14 @@ async function runReprocess(
     }
   }
 
-  console.log(`\nReview complete. ${totalAccepted} accepted, ${totalSkipped} skipped.`);
+  if (totalFailed > 0) {
+    console.log(
+      `\nReview complete. ${totalAccepted} accepted, ${totalSkipped} skipped, ${totalFailed} batches failed.`,
+    );
+  } else {
+    console.log(`\nReview complete. ${totalAccepted} accepted, ${totalSkipped} skipped.`);
+  }
+  return totalFailed;
 }
 
 async function main() {
@@ -644,46 +795,63 @@ async function main() {
   const gemini = new GeminiClient(process.env.GEMINI_API_KEY);
   const project = new TranslationProject();
 
-  console.error(`Mode: ${mode}`);
-  console.error('Loading project...');
-  await project.load(PROJECT_PATH);
-
-  const targetLangs = project.targetLangs;
-  if (targetLangs.length === 0) {
-    console.log('No target languages configured. Nothing to do.');
-    process.exit(0);
-  }
-
-  console.error(`Source: ${project.sourceLang} → Targets: ${targetLangs.join(', ')}`);
-
-  // Periodically flush new edits to disk so an interrupted long run isn't lost.
-  const autosave = setInterval(() => {
-    project
-      .saveIfDirty(PROJECT_PATH)
-      .then((saved) => saved && console.error('[autosave] saved.'))
-      .catch((err) => console.error(`[autosave] failed: ${err.message}`));
-  }, 60_000);
-  autosave.unref();
+  let autosave: NodeJS.Timeout | undefined;
 
   try {
+    console.error(`Mode: ${mode}`);
+    console.error('Loading project...');
+    await project.load(PROJECT_PATH);
+
+    const targetLangs = project.targetLangs;
+    if (targetLangs.length === 0) {
+      console.log('No target languages configured. Nothing to do.');
+      process.exitCode = 0;
+      return;
+    }
+
+    console.error(`Source: ${project.sourceLang} → Targets: ${targetLangs.join(', ')}`);
+
+    // Periodically flush new edits to disk so an interrupted long run isn't lost.
+    autosave = setInterval(() => {
+      project
+        .saveIfDirty(PROJECT_PATH)
+        .then((saved) => saved && console.error('[autosave] saved.'))
+        .catch((err) => console.error(`[autosave] failed: ${err.message}`));
+    }, 60_000);
+    autosave.unref();
+
+    let totalFailed = 0;
     if (isReprocess) {
       const reviewer = new UserReviewer();
       try {
-        await runReprocess(gemini, project, reviewer);
+        totalFailed = await runReprocess(gemini, project, reviewer);
       } finally {
         reviewer.close();
       }
     } else {
-      await runTranslate(gemini, project);
+      totalFailed = await runTranslate(gemini, project);
     }
-  } finally {
-    clearInterval(autosave);
-  }
 
-  console.error('Saving project to disk...');
-  await project.save(PROJECT_PATH);
-  console.error('Done.');
-  process.exit(0);
+    console.error('Saving project to disk...');
+    await project.save(PROJECT_PATH);
+    console.error('Done.');
+
+    process.exitCode = totalFailed > 0 ? 1 : 0;
+  } catch (err) {
+    console.error('Error during project load or processing:', err);
+    try {
+      console.error('Saving project to disk before exit...');
+      await project.save(PROJECT_PATH);
+    } catch (saveErr) {
+      console.error('Failed to save project on error:', saveErr);
+    }
+    process.exitCode = 1;
+  } finally {
+    if (autosave) {
+      clearInterval(autosave);
+    }
+    project.close();
+  }
 }
 
 main().catch((err) => {

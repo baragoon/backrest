@@ -15,8 +15,85 @@ import (
 	"github.com/baragoon/backrest/internal/orchestrator/logging"
 	"github.com/baragoon/backrest/internal/orchestrator/tasks"
 	"github.com/baragoon/backrest/internal/platformutil"
-	"github.com/google/shlex"
+	"github.com/kballard/go-shellquote"
 )
+
+// stripShebangComment removes trailing comments from a shebang line.
+// A comment is # that appears at a word boundary (after whitespace or at start),
+// but not inside quoted arguments. This preserves shebangs with quoted arguments
+// that may contain # characters.
+func stripShebangComment(shebang string) string {
+	escaped := false
+	doubleQuoted := false
+	singleQuoted := false
+	lastCharWasWhitespace := true
+
+	for i, ch := range shebang {
+		if escaped {
+			escaped = false
+			lastCharWasWhitespace = false
+			continue
+		}
+
+		if ch == '\\' && !singleQuoted {
+			escaped = true
+			lastCharWasWhitespace = false
+			continue
+		}
+
+		if ch == '"' && !singleQuoted {
+			doubleQuoted = !doubleQuoted
+			lastCharWasWhitespace = false
+			continue
+		}
+
+		if ch == '\'' && !doubleQuoted {
+			singleQuoted = !singleQuoted
+			lastCharWasWhitespace = false
+			continue
+		}
+
+		// Comment: unquoted # at word boundary (start or after whitespace)
+		if ch == '#' && !doubleQuoted && !singleQuoted && lastCharWasWhitespace {
+			return shebang[:i]
+		}
+
+		isWhitespace := !doubleQuoted && !singleQuoted && (ch == ' ' || ch == '\t')
+		if isWhitespace {
+			lastCharWasWhitespace = true
+		} else {
+			lastCharWasWhitespace = false
+		}
+	}
+
+	return shebang
+}
+
+// splitShebang preserves legacy escaped spaces inside double quotes while
+// leaving escaped backslashes and single-quoted text to shellquote.
+func splitShebang(input string) ([]string, error) {
+	var normalized strings.Builder
+	singleQuoted, doubleQuoted := false, false
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+		if ch == '\\' && !singleQuoted && i+1 < len(input) {
+			i++
+			if !doubleQuoted || input[i] != ' ' {
+				normalized.WriteByte(ch)
+			}
+			normalized.WriteByte(input[i])
+			continue
+		}
+		if ch == '\'' && !doubleQuoted {
+			singleQuoted = !singleQuoted
+		}
+		if ch == '"' && !singleQuoted {
+			doubleQuoted = !doubleQuoted
+		}
+		normalized.WriteByte(ch)
+	}
+	return shellquote.Split(normalized.String())
+}
 
 type commandHandler struct{}
 
@@ -43,7 +120,12 @@ func (commandHandler) Execute(ctx context.Context, h *v1.Hook, vars interface{},
 		if nextLine == -1 {
 			nextLine = len(command)
 		}
-		shell, err = shlex.Split(strings.Trim(command[2:nextLine], " "))
+		shebang := strings.TrimRight(command[2:nextLine], " \r")
+
+		// Strip trailing comments from shebang: recognize # only at word boundary
+		shebang = stripShebangComment(shebang)
+
+		shell, err = splitShebang(shebang)
 		if err != nil {
 			return fmt.Errorf("parsing shell for command: %w", err)
 		} else if len(shell) == 0 {

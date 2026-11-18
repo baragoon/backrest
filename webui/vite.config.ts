@@ -2,7 +2,7 @@ import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tsconfigPaths from 'vite-tsconfig-paths';
-import viteCompression from 'vite-plugin-compression';
+import viteCompression from 'vite-plugin-compression2';
 // import { visualizer } from 'rollup-plugin-visualizer';
 
 export default defineConfig(({ mode }) => {
@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
       }),
       react(),
       tsconfigPaths(),
-      viteCompression({ algorithm: 'gzip', ext: '.gz', deleteOriginFile: true }),
+      viteCompression({ algorithms: ['gzip'], deleteOriginalAssets: true }),
       // viteCompression({ algorithm: 'brotliCompress', ext: '.br' }),
       // visualizer({
       //   open: false,

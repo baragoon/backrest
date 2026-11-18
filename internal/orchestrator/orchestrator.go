@@ -19,7 +19,7 @@ import (
 	"github.com/baragoon/backrest/internal/orchestrator/tasks"
 	"github.com/baragoon/backrest/internal/queue"
 	"github.com/google/uuid"
-	"go.uber.org/multierr"
+	"github.com/hashicorp/go-multierror"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
@@ -188,13 +188,13 @@ func (o *Orchestrator) autoInitReposIfNeeded(resticBin string) error {
 		zap.L().Info("auto-initializing repo", zap.String("repo", r.Id))
 		rorch, err := repo.NewRepoOrchestrator(cfg, r, resticBin)
 		if err != nil {
-			fullErr = multierr.Append(fullErr, fmt.Errorf("auto-initialize repo %q: %w", r.Id, err))
+			fullErr = multierror.Append(fullErr, fmt.Errorf("auto-initialize repo %q: %w", r.Id, err))
 			continue
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), defaultAutoInitTimeout)
 		defer cancel()
 		if err := rorch.Init(ctx); err != nil {
-			fullErr = multierr.Append(fullErr, fmt.Errorf("auto-initialize repo %q: %w", r.Id, err))
+			fullErr = multierror.Append(fullErr, fmt.Errorf("auto-initialize repo %q: %w", r.Id, err))
 			continue
 		}
 

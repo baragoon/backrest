@@ -218,7 +218,13 @@ All build dependencies are defined in `shell.nix` and can be activated automatic
 If you prefer not to use Nix, install the following manually:
 
 - [Go](https://go.dev/) 1.24 or greater
-- [Node.js](https://nodejs.org/en) 20.x and [pnpm](https://pnpm.io/) 9
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:8de5c9990ffccb7230da2648aa1f2dd5603f4bd704f29bfb553b138129f9e9cd -->
+
+- [Node.js](https://nodejs.org/en) 22.13.0 or greater and [pnpm](https://pnpm.io/) 11
+
+<!-- /coderabbit-ai-generated:v1 -->
 - [goreleaser](https://github.com/goreleaser/goreleaser) `go install github.com/goreleaser/goreleaser/v2@latest`
 
 **(Optional) To edit protobuf definitions:**

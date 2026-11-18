@@ -8,10 +8,10 @@ import (
 
 func TestCleanupOrphanedRemoteReposAndPlans(t *testing.T) {
 	tests := []struct {
-		name          string
-		config        *v1.Config
-		wantRepoIDs   []string
-		wantPlanIDs   []string
+		name        string
+		config      *v1.Config
+		wantRepoIDs []string
+		wantPlanIDs []string
 	}{
 		{
 			name: "no remote repos, nothing removed",

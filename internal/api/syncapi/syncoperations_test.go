@@ -27,9 +27,9 @@ func TestFuzzOperationSync(t *testing.T) {
 	testutil.InstallZapLogger(t)
 
 	const (
-		numRounds      = 10  // rounds of mutations
-		opsPerRound    = 20  // mutations per round
-		reconnectEvery = 3   // force reconnect every N rounds
+		numRounds      = 10 // rounds of mutations
+		opsPerRound    = 20 // mutations per round
+		reconnectEvery = 3  // force reconnect every N rounds
 		testTimeout    = 60 * time.Second
 	)
 

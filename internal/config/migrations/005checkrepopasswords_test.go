@@ -12,11 +12,11 @@ func TestMigration005CheckRepoPasswords(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		config      func() *v1.Config   // factory so each run gets a fresh config
-		envVars     map[string]string    // env vars to set for the test
-		ackEnvVar   bool                 // whether to set ISSUE_1139_FIX_PASSWORDS=1
+		config      func() *v1.Config // factory so each run gets a fresh config
+		envVars     map[string]string // env vars to set for the test
+		ackEnvVar   bool              // whether to set ISSUE_1139_FIX_PASSWORDS=1
 		wantErr     bool
-		errContains string              // substring that must appear in the error
+		errContains string                       // substring that must appear in the error
 		checkConfig func(*testing.T, *v1.Config) // optional post-migration assertions
 	}{
 		{

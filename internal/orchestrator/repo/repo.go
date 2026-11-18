@@ -18,9 +18,225 @@ import (
 	"github.com/baragoon/backrest/internal/orchestrator/logging"
 	"github.com/baragoon/backrest/internal/protoutil"
 	"github.com/baragoon/backrest/pkg/restic"
-	"github.com/google/shlex"
 	"go.uber.org/zap"
 )
+
+// parseFlagArgs parses flag arguments with comment and escaped-space handling
+// compatible with the previous shlex-based behavior.
+// - Removes unquoted comments (text after # outside quotes, through the next newline)
+// - Treats unquoted CRLF as whitespace before splitting
+// - Unescapes backslash-escaped spaces only within double-quoted fragments
+// - Preserves literal backslashes in single-quoted fragments
+func parseFlagArgs(input string) ([]string, error) {
+	// First pass: normalize CRLF and strip comments that occur at word boundaries
+	// A comment is an unquoted # that appears at input start or after whitespace
+	escaped := false
+	doubleQuoted := false
+	singleQuoted := false
+	var normalized strings.Builder
+	lastCharWasWhitespace := true // Start of input acts like whitespace for comment detection
+
+	i := 0
+	for i < len(input) {
+		ch := input[i]
+		if escaped {
+			normalized.WriteByte(ch)
+			escaped = false
+			lastCharWasWhitespace = false
+			i++
+			continue
+		}
+
+		// Continuations do not begin or end a shell word.
+		if ch == '\\' && !singleQuoted && i+1 < len(input) {
+			if input[i+1] == '\n' {
+				i += 2
+				continue
+			}
+			if !doubleQuoted && input[i+1] == '\r' && i+2 < len(input) && input[i+2] == '\n' {
+				i += 3
+				continue
+			}
+		}
+
+		// Backslashes only escape outside quotes and in double quotes
+		if ch == '\\' && !singleQuoted {
+			normalized.WriteByte(ch)
+			escaped = true
+			// The escaped character will establish a word boundary state.
+			i++
+			continue
+		}
+
+		if ch == '"' && !singleQuoted {
+			doubleQuoted = !doubleQuoted
+			normalized.WriteByte(ch)
+			lastCharWasWhitespace = false
+			i++
+			continue
+		}
+
+		if ch == '\'' && !doubleQuoted {
+			singleQuoted = !singleQuoted
+			normalized.WriteByte(ch)
+			lastCharWasWhitespace = false
+			i++
+			continue
+		}
+
+		// Comment: unquoted # at word boundary (after whitespace or at start)
+		if ch == '#' && !doubleQuoted && !singleQuoted && lastCharWasWhitespace {
+			// Skip through the end of this line, then resume parsing
+			j := i + 1
+			for j < len(input) && input[j] != '\n' {
+				j++
+			}
+			// If we found a newline, include it and continue parsing after it
+			if j < len(input) && input[j] == '\n' {
+				normalized.WriteRune('\n')
+				i = j + 1
+				lastCharWasWhitespace = true
+				continue
+			}
+			// Comment extends to end of input, stop here
+			break
+		}
+
+		// Treat unquoted CR as whitespace (part of CRLF normalization)
+		if ch == '\r' && !doubleQuoted && !singleQuoted {
+			normalized.WriteRune(' ')
+			lastCharWasWhitespace = true
+			i++
+			continue
+		}
+
+		// Track if we're at whitespace (for next iteration's comment detection)
+		isWhitespace := !doubleQuoted && !singleQuoted && (ch == ' ' || ch == '\t' || ch == '\n')
+		if isWhitespace {
+			lastCharWasWhitespace = true
+		} else {
+			lastCharWasWhitespace = false
+		}
+
+		normalized.WriteByte(ch)
+		i++
+	}
+
+	input = normalized.String()
+
+	// Split arguments with careful tracking of quote contexts.
+	// We need to know which parts of each result came from double vs single quotes
+	// so we can correctly handle escaped spaces.
+
+	type positionInfo struct {
+		inDouble bool
+		inSingle bool
+	}
+
+	var args []string
+	var currentArg strings.Builder
+	var currentArgQuoteMap []positionInfo // tracks quote context for each unquoted char
+	var hadQuotes bool                    // track if current argument had any quotes (even if empty)
+
+	esc2 := false
+	dq2 := false
+	sq2 := false
+
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+
+		if esc2 {
+			currentArg.WriteByte(ch)
+			currentArgQuoteMap = append(currentArgQuoteMap, positionInfo{inDouble: dq2, inSingle: sq2})
+			esc2 = false
+			continue
+		}
+
+		if ch == '\\' {
+			// In single quotes, backslash is literal
+			if sq2 {
+				currentArg.WriteByte(ch)
+				currentArgQuoteMap = append(currentArgQuoteMap, positionInfo{inDouble: dq2, inSingle: sq2})
+				continue
+			}
+			// In double quotes, backslash only escapes: $ ` " \ and newline
+			// For other characters, preserve the backslash
+			if dq2 && i+1 < len(input) {
+				nextCh := input[i+1]
+				if nextCh != '$' && nextCh != '`' && nextCh != '"' && nextCh != '\\' && nextCh != '\n' {
+					// Not an escapable character in double quotes; preserve backslash
+					currentArg.WriteByte(ch)
+					currentArgQuoteMap = append(currentArgQuoteMap, positionInfo{inDouble: dq2, inSingle: sq2})
+					continue
+				}
+			}
+			// Outside quotes or escaping a special character; mark for escape processing
+			esc2 = true
+			continue
+		}
+
+		if ch == '"' && !sq2 {
+			hadQuotes = true
+			dq2 = !dq2
+			continue
+		}
+
+		if ch == '\'' && !dq2 {
+			hadQuotes = true
+			sq2 = !sq2
+			continue
+		}
+
+		if !dq2 && !sq2 && (ch == ' ' || ch == '\t' || ch == '\n') {
+			if currentArg.Len() > 0 || hadQuotes {
+				// Process this argument: unescape \ spaces only from double-quoted fragments
+				arg := currentArg.String()
+				// Selectively unescape only backslash-spaces from double-quoted fragments
+				var result strings.Builder
+				for j := 0; j < len(arg); j++ {
+					if arg[j] == '\\' && j+1 < len(arg) && arg[j+1] == ' ' && j < len(currentArgQuoteMap) && currentArgQuoteMap[j].inDouble {
+						// This backslash-space is from a double-quoted fragment; unescape it
+						result.WriteByte(' ')
+						j++ // Skip the space
+					} else {
+						result.WriteByte(arg[j])
+					}
+				}
+				args = append(args, result.String())
+				currentArg.Reset()
+				currentArgQuoteMap = currentArgQuoteMap[:0]
+				hadQuotes = false
+			}
+			continue
+		}
+
+		currentArg.WriteByte(ch)
+		currentArgQuoteMap = append(currentArgQuoteMap, positionInfo{inDouble: dq2, inSingle: sq2})
+	}
+
+	if dq2 || sq2 || esc2 {
+		return nil, errors.New("unfinished quote or escape in flag arguments")
+	}
+
+	// Don't forget the last argument
+	if currentArg.Len() > 0 || hadQuotes {
+		arg := currentArg.String()
+		// Selectively unescape only backslash-spaces from double-quoted fragments
+		var result strings.Builder
+		for j := 0; j < len(arg); j++ {
+			if arg[j] == '\\' && j+1 < len(arg) && arg[j+1] == ' ' && j < len(currentArgQuoteMap) && currentArgQuoteMap[j].inDouble {
+				// This backslash-space is from a double-quoted fragment; unescape it
+				result.WriteByte(' ')
+				j++ // Skip the space
+			} else {
+				result.WriteByte(arg[j])
+			}
+		}
+		args = append(args, result.String())
+	}
+
+	return args, nil
+}
 
 // RepoOrchestrator implements higher level repository operations on top of
 // the restic package. It can be thought of as a controller for a repo.
@@ -60,7 +276,7 @@ func NewRepoOrchestrator(config *v1.Config, repoConfig *v1.Repo, resticPath stri
 	}
 
 	for _, f := range repoConfig.GetFlags() {
-		args, err := shlex.Split(ExpandEnv(f))
+		args, err := parseFlagArgs(ExpandEnv(f))
 		if err != nil {
 			return nil, fmt.Errorf("parse flag %q for repo %q: %w", f, repoConfig.Id, err)
 		}
@@ -173,7 +389,7 @@ func (r *RepoOrchestrator) Backup(ctx context.Context, plan *v1.Plan, dryRun boo
 	}
 
 	for _, f := range plan.GetBackupFlags() {
-		args, err := shlex.Split(f)
+		args, err := parseFlagArgs(f)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse backup flag %q for plan %q: %w", f, plan.Id, err)
 		}
@@ -416,7 +632,7 @@ func (r *RepoOrchestrator) RunCommand(ctx context.Context, command string, write
 	defer flush()
 
 	r.logger(ctx).Debug("running command", zap.String("command", command))
-	args, err := shlex.Split(command)
+	args, err := parseFlagArgs(command)
 	if err != nil {
 		return fmt.Errorf("parse command: %w", err)
 	}
