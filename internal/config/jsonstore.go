@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -10,7 +9,7 @@ import (
 	"time"
 
 	v1 "github.com/baragoon/backrest/gen/go/v1"
-	"github.com/natefinch/atomic"
+	"github.com/google/renameio/v2"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -96,9 +95,18 @@ func (f *JsonFileStore) update(config *v1.Config) error {
 		return fmt.Errorf("backup config file: %w", err)
 	}
 
-	err = atomic.WriteFile(f.Path, bytes.NewReader(data))
+	t, err := renameio.TempFile(filepath.Dir(f.Path), f.Path)
 	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	defer t.Cleanup()
+
+	if _, err := t.Write(data); err != nil {
 		return fmt.Errorf("write config file: %w", err)
+	}
+
+	if err := t.CloseAtomicallyReplace(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
 	}
 
 	// only the user running backrest should be able to read the config.
@@ -120,9 +128,20 @@ func (f *JsonFileStore) makeBackup() error {
 
 	// backup the current config file
 	backupName := fmt.Sprintf("%s.bak.%s", f.Path, time.Now().Format("2006-01-02-15-04-05"))
-	if err := atomic.WriteFile(backupName, bytes.NewBuffer(curConfig)); err != nil {
+	t, err := renameio.TempFile(filepath.Dir(backupName), backupName)
+	if err != nil {
 		return err
 	}
+	defer t.Cleanup()
+
+	if _, err := t.Write(curConfig); err != nil {
+		return err
+	}
+
+	if err := t.CloseAtomicallyReplace(); err != nil {
+		return err
+	}
+
 	if err := os.Chmod(backupName, 0600); err != nil {
 		return err
 	}

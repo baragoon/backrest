@@ -18,7 +18,7 @@ import (
 	"github.com/baragoon/backrest/internal/orchestrator/logging"
 	"github.com/baragoon/backrest/internal/protoutil"
 	"github.com/baragoon/backrest/pkg/restic"
-	"github.com/google/shlex"
+	"github.com/kballard/go-shellquote"
 	"go.uber.org/zap"
 )
 
@@ -60,7 +60,7 @@ func NewRepoOrchestrator(config *v1.Config, repoConfig *v1.Repo, resticPath stri
 	}
 
 	for _, f := range repoConfig.GetFlags() {
-		args, err := shlex.Split(ExpandEnv(f))
+		args, err := shellquote.Split(ExpandEnv(f))
 		if err != nil {
 			return nil, fmt.Errorf("parse flag %q for repo %q: %w", f, repoConfig.Id, err)
 		}
@@ -173,7 +173,7 @@ func (r *RepoOrchestrator) Backup(ctx context.Context, plan *v1.Plan, dryRun boo
 	}
 
 	for _, f := range plan.GetBackupFlags() {
-		args, err := shlex.Split(f)
+		args, err := shellquote.Split(f)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse backup flag %q for plan %q: %w", f, plan.Id, err)
 		}
@@ -416,7 +416,7 @@ func (r *RepoOrchestrator) RunCommand(ctx context.Context, command string, write
 	defer flush()
 
 	r.logger(ctx).Debug("running command", zap.String("command", command))
-	args, err := shlex.Split(command)
+	args, err := shellquote.Split(command)
 	if err != nil {
 		return fmt.Errorf("parse command: %w", err)
 	}

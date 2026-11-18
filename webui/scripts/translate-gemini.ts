@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import {
   loadProjectFromDirectory,
   selectBundleNested,
@@ -72,35 +72,35 @@ type ReviewResult =
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 const translationSchema = {
-  type: SchemaType.ARRAY,
+  type: 'array',
   items: {
-    type: SchemaType.OBJECT,
+    type: 'object',
     properties: {
-      id: { type: SchemaType.STRING },
-      translation: { type: SchemaType.STRING },
+      id: { type: 'string' },
+      translation: { type: 'string' },
     },
     required: ['id', 'translation'],
   },
 } as any;
 
 const reprocessSchema = {
-  type: SchemaType.ARRAY,
+  type: 'array',
   items: {
     oneOf: [
       {
-        type: SchemaType.OBJECT,
+        type: 'object',
         properties: {
-          id: { type: SchemaType.STRING },
-          ok: { type: SchemaType.BOOLEAN },
+          id: { type: 'string' },
+          ok: { type: 'boolean' },
         },
         required: ['id', 'ok'],
       },
       {
-        type: SchemaType.OBJECT,
+        type: 'object',
         properties: {
-          id: { type: SchemaType.STRING },
-          newTranslation: { type: SchemaType.STRING },
-          explanation: { type: SchemaType.STRING },
+          id: { type: 'string' },
+          newTranslation: { type: 'string' },
+          explanation: { type: 'string' },
         },
         required: ['id', 'newTranslation', 'explanation'],
       },
@@ -234,25 +234,27 @@ async function* createBufferedIterator<T, R>(
 // ─── GeminiClient ─────────────────────────────────────────────────────────────
 
 class GeminiClient {
-  private model: ReturnType<GoogleGenerativeAI['getGenerativeModel']>;
+  private ai: GoogleGenAI;
 
   constructor(apiKey: string) {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    this.model = genAI.getGenerativeModel({ model: MODEL_NAME });
+    this.ai = new GoogleGenAI({ apiKey });
   }
 
   private async call<T>(prompt: string, schema: any): Promise<T> {
     let lastErr: any;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const result = await this.model.generateContent({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: {
+        const result = await this.ai.models.generateContent({
+          model: MODEL_NAME,
+          contents: prompt,
+          config: {
             responseMimeType: 'application/json',
-            responseSchema: schema,
+            responseJsonSchema: schema,
           },
         });
-        return JSON.parse(result.response.text()) as T;
+        const text = result.text;
+        if (!text) throw new Error('Empty response from Gemini API');
+        return JSON.parse(text) as T;
       } catch (err: any) {
         lastErr = err;
         if (attempt === MAX_RETRIES) break;

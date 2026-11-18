@@ -15,7 +15,7 @@ import (
 	"github.com/baragoon/backrest/internal/orchestrator/logging"
 	"github.com/baragoon/backrest/internal/orchestrator/tasks"
 	"github.com/baragoon/backrest/internal/platformutil"
-	"github.com/google/shlex"
+	"github.com/kballard/go-shellquote"
 )
 
 type commandHandler struct{}
@@ -43,7 +43,7 @@ func (commandHandler) Execute(ctx context.Context, h *v1.Hook, vars interface{},
 		if nextLine == -1 {
 			nextLine = len(command)
 		}
-		shell, err = shlex.Split(strings.Trim(command[2:nextLine], " "))
+		shell, err = shellquote.Split(strings.Trim(command[2:nextLine], " "))
 		if err != nil {
 			return fmt.Errorf("parsing shell for command: %w", err)
 		} else if len(shell) == 0 {

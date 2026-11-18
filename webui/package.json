@@ -48,7 +48,7 @@
     "packageExports": true
   },
   "devDependencies": {
-    "@google/generative-ai": "0.24.1",
+    "@google/genai": "^3.4.0",
     "@inlang/cli": "3.6.0",
     "@inlang/paraglide-js": "3.2.2",
     "@inlang/sdk": "4.2.0",
@@ -73,7 +73,7 @@
     "tsx": "4.23.15",
     "typescript": "7.0.2",
     "vite": "8.3.8",
-    "vite-plugin-compression": "0.5.1",
+    "vite-plugin-compression2": "^2.5.4",
     "vite-tsconfig-paths": "6.1.1",
     "vitest": "5.1.0"
   }
