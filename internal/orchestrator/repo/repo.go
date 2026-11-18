@@ -43,7 +43,8 @@ func parseFlagArgs(input string) ([]string, error) {
 		if escaped {
 			normalized.WriteByte(ch)
 			escaped = false
-			lastCharWasWhitespace = false
+			// Don't update lastCharWasWhitespace here; preserve the state
+			// from before the escaping backslash
 			i++
 			continue
 		}
@@ -64,7 +65,8 @@ func parseFlagArgs(input string) ([]string, error) {
 		if ch == '\\' && !singleQuoted {
 			normalized.WriteByte(ch)
 			escaped = true
-			lastCharWasWhitespace = false
+			// Don't change lastCharWasWhitespace yet; keep the current state
+			// so that after the escape sequence, we maintain the word boundary
 			i++
 			continue
 		}
