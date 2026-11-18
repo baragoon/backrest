@@ -28,13 +28,13 @@ var (
 // only the owner full access and denies all other access. This is used for
 // temporary files to prevent information disclosure.
 func buildRestrictiveSecurityDescriptor(ownerSID *windows.SID) (*windows.SECURITY_DESCRIPTOR, error) {
-	// Create an ACL with an explicit grant for the owner using SetEntriesInAcl.
-	entries := []windows.ExplicitAccess{
+	// Create an ACL with an explicit grant for the owner using ACLFromEntries.
+	entries := []windows.EXPLICIT_ACCESS{
 		{
-			AccessPermissions: 0x1f01ff, // Full control (FILE_ALL_ACCESS)
+			AccessPermissions: windows.ACCESS_MASK(0x1f01ff), // Full control (FILE_ALL_ACCESS)
 			AccessMode:        windows.GRANT_ACCESS,
 			Inheritance:       windows.NO_INHERITANCE,
-			Trustee: windows.Trustee{
+			Trustee: windows.TRUSTEE{
 				MultipleTrusteeOperation: windows.NO_MULTIPLE_TRUSTEE,
 				TrusteeForm:              windows.TRUSTEE_IS_SID,
 				TrusteeType:              windows.TRUSTEE_IS_USER,
@@ -43,7 +43,7 @@ func buildRestrictiveSecurityDescriptor(ownerSID *windows.SID) (*windows.SECURIT
 		},
 	}
 
-	acl, err := windows.SetEntriesInAcl(entries)
+	acl, err := windows.ACLFromEntries(entries, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create ACL: %w", err)
 	}
