@@ -556,8 +556,9 @@ class UserReviewer {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-async function runTranslate(gemini: GeminiClient, project: TranslationProject): Promise<void> {
+async function runTranslate(gemini: GeminiClient, project: TranslationProject): Promise<number> {
   let totalUpdates = 0;
+  let totalFailed = 0;
 
   const work = buildWork(
     project.targetLangs,
@@ -566,7 +567,7 @@ async function runTranslate(gemini: GeminiClient, project: TranslationProject): 
   );
   if (work.length === 0) {
     console.log('Nothing to translate.');
-    return;
+    return 0;
   }
   console.error(
     `${work.length} batches to translate across ${project.targetLangs.length} languages.`,
@@ -581,6 +582,7 @@ async function runTranslate(gemini: GeminiClient, project: TranslationProject): 
       console.error(
         `\n[${w.lang}] ERROR: batch ${w.batchIndex + 1}/${w.batchCount} failed after retries: ${err.message}`,
       );
+      totalFailed++;
       return [] as TranslationResult[];
     }
   })) {
@@ -597,13 +599,17 @@ async function runTranslate(gemini: GeminiClient, project: TranslationProject): 
   }
 
   console.log(`\nTranslation complete. ${totalUpdates} strings translated.`);
+  if (totalFailed > 0) {
+    console.log(`Warning: ${totalFailed} batches failed.`);
+  }
+  return totalFailed;
 }
 
 async function runReprocess(
   gemini: GeminiClient,
   project: TranslationProject,
   reviewer: UserReviewer,
-): Promise<void> {
+): Promise<number> {
   let totalAccepted = 0;
   let totalSkipped = 0;
   let totalFailed = 0;
@@ -615,7 +621,7 @@ async function runReprocess(
   );
   if (work.length === 0) {
     console.log('No existing translations to review.');
-    return;
+    return 0;
   }
   console.error(`Reviewing ${work.length} batches across ${project.targetLangs.length} languages.`);
 
@@ -691,6 +697,7 @@ async function runReprocess(
   } else {
     console.log(`\nReview complete. ${totalAccepted} accepted, ${totalSkipped} skipped.`);
   }
+  return totalFailed;
 }
 
 async function main() {
@@ -727,24 +734,29 @@ async function main() {
   autosave.unref();
 
   try {
+    let totalFailed = 0;
     if (isReprocess) {
       const reviewer = new UserReviewer();
       try {
-        await runReprocess(gemini, project, reviewer);
+        totalFailed = await runReprocess(gemini, project, reviewer);
       } finally {
         reviewer.close();
       }
     } else {
-      await runTranslate(gemini, project);
+      totalFailed = await runTranslate(gemini, project);
     }
+
+    console.error('Saving project to disk...');
+    await project.save(PROJECT_PATH);
+    console.error('Done.');
+    
+    if (totalFailed > 0) {
+      process.exit(1);
+    }
+    process.exit(0);
   } finally {
     clearInterval(autosave);
   }
-
-  console.error('Saving project to disk...');
-  await project.save(PROJECT_PATH);
-  console.error('Done.');
-  process.exit(0);
 }
 
 main().catch((err) => {

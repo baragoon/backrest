@@ -78,7 +78,7 @@ pnpm run translate-reprocess
 **API Behavior:**
 - Request and response schema structure updated to match @google/genai 3.4.0 requirements
 - Both `translate` and `translate-reprocess` commands use `responseJsonSchema` with strict validation
-- The reprocess result schema uses `oneOf` to define two response types: `{ok: true}` (unchanged) or `{newTranslation, explanation}` (suggestion). The script filters results by checking for the `newTranslation` field; this selects only suggestion entries and does not enforce mutual exclusivity at schema level. Entries like `{id:"snapshot",ok:false}` without a `newTranslation` field are dropped, so the script reports "all translations OK" only when no suggestions were returned.
+- The reprocess result schema uses `oneOf` to define two response types: `{id, ok: true}` (unchanged) or `{id, newTranslation, explanation}` (suggestion). The ok field is constrained to true by enum, and the script validates responses match the schema before filtering. The script filters results by checking for the `newTranslation` field; this selects only suggestion entries. Invalid responses that don't match either schema are rejected with an error.
 - Variable placeholders and error handling updated to match new API response format
 
 The commands should work identically to before the migration.

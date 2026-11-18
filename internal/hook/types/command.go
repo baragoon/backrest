@@ -27,37 +27,37 @@ func stripShebangComment(shebang string) string {
 	doubleQuoted := false
 	singleQuoted := false
 	lastCharWasWhitespace := true
-	
+
 	for i, ch := range shebang {
 		if escaped {
 			escaped = false
 			lastCharWasWhitespace = false
 			continue
 		}
-		
+
 		if ch == '\\' && !singleQuoted {
 			escaped = true
 			lastCharWasWhitespace = false
 			continue
 		}
-		
+
 		if ch == '"' && !singleQuoted {
 			doubleQuoted = !doubleQuoted
 			lastCharWasWhitespace = false
 			continue
 		}
-		
+
 		if ch == '\'' && !doubleQuoted {
 			singleQuoted = !singleQuoted
 			lastCharWasWhitespace = false
 			continue
 		}
-		
+
 		// Comment: unquoted # at word boundary (start or after whitespace)
 		if ch == '#' && !doubleQuoted && !singleQuoted && lastCharWasWhitespace {
 			return shebang[:i]
 		}
-		
+
 		isWhitespace := !doubleQuoted && !singleQuoted && (ch == ' ' || ch == '\t')
 		if isWhitespace {
 			lastCharWasWhitespace = true
@@ -65,7 +65,7 @@ func stripShebangComment(shebang string) string {
 			lastCharWasWhitespace = false
 		}
 	}
-	
+
 	return shebang
 }
 
@@ -95,10 +95,10 @@ func (commandHandler) Execute(ctx context.Context, h *v1.Hook, vars interface{},
 			nextLine = len(command)
 		}
 		shebang := strings.TrimRight(command[2:nextLine], " \r")
-		
+
 		// Strip trailing comments from shebang: recognize # only at word boundary
 		shebang = stripShebangComment(shebang)
-		
+
 		shell, err = shellquote.Split(shebang)
 		if err != nil {
 			return fmt.Errorf("parsing shell for command: %w", err)

@@ -122,9 +122,9 @@ func parseFlagArgs(input string) ([]string, error) {
 	// Second pass: for each argument, track which of its fragments were double-quoted
 	// to determine whether escaped spaces in that argument should be unescaped.
 	// An argument may have mixed quotes like 'single'"double", so we need per-fragment tracking.
-	
+
 	argHasDoubleQuoteWithEscSp := make(map[int]bool)
-	
+
 	escaped = false
 	doubleQuoted = false
 	singleQuoted = false
@@ -132,7 +132,7 @@ func parseFlagArgs(input string) ([]string, error) {
 	argStart := 0
 	argHasDoubleQuote := false
 	argHasEscSp := false
-	
+
 	for i, ch := range input {
 		if escaped {
 			escaped = false
@@ -173,7 +173,7 @@ func parseFlagArgs(input string) ([]string, error) {
 	if argStart < len(input) && argHasDoubleQuote && argHasEscSp {
 		argHasDoubleQuoteWithEscSp[currentArgIndex] = true
 	}
-	
+
 	// Now unescape \ spaces only for arguments that actually had escaped spaces within double quotes
 	for i, arg := range args {
 		if argHasDoubleQuoteWithEscSp[i] && strings.Contains(arg, `\ `) {

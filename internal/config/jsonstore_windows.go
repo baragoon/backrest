@@ -4,7 +4,6 @@
 package config
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -13,7 +12,8 @@ import (
 	"time"
 
 	v1 "github.com/baragoon/backrest/gen/go/v1"
-	"github.com/natefinch/atomic"
+	"github.com/google/renameio/v2"
+	"github.com/hectane/go-acl"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -80,7 +80,7 @@ func (f *JsonFileStore) get() (*v1.Config, error) {
 }
 
 // update writes the config to disk. Must be called with mu held.
-// On Windows, uses natefinch/atomic for atomic writes since renameio/v2 doesn't support Windows.
+// On Windows, uses renameio with DACL permissions for owner-only access.
 func (f *JsonFileStore) update(config *v1.Config) error {
 	data, err := protojson.MarshalOptions{
 		Indent:    "  ",
@@ -100,9 +100,23 @@ func (f *JsonFileStore) update(config *v1.Config) error {
 		return fmt.Errorf("backup config file: %w", err)
 	}
 
-	err = atomic.WriteFile(f.Path, bytes.NewReader(data))
+	t, err := renameio.TempFile(filepath.Dir(f.Path), f.Path)
 	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	defer t.Cleanup()
+
+	// On Windows, set restrictive DACL before writing sensitive data
+	if err := acl.Apply(t.Name(), true, false, acl.GrantSid(0x101, 0x1f01ff)); err != nil {
+		return fmt.Errorf("set file permissions: %w", err)
+	}
+
+	if _, err := t.Write(data); err != nil {
 		return fmt.Errorf("write config file: %w", err)
+	}
+
+	if err := t.CloseAtomicallyReplace(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
 	}
 
 	return nil
@@ -119,8 +133,17 @@ func (f *JsonFileStore) makeBackup() error {
 
 	// backup the current config file
 	backupName := fmt.Sprintf("%s.bak.%s", f.Path, time.Now().Format("2006-01-02-15-04-05"))
-	err = atomic.WriteFile(backupName, bytes.NewReader(curConfig))
+	t, err := renameio.TempFile(filepath.Dir(backupName), backupName)
 	if err != nil {
+		return err
+	}
+	defer t.Cleanup()
+
+	if _, err := t.Write(curConfig); err != nil {
+		return err
+	}
+
+	if err := t.CloseAtomicallyReplace(); err != nil {
 		return err
 	}
 
