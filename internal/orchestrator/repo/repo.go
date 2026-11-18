@@ -191,16 +191,18 @@ func parseFlagArgs(input string) ([]string, error) {
 			if currentArg.Len() > 0 || hadQuotes {
 				// Process this argument: unescape \ spaces only from double-quoted fragments
 				arg := currentArg.String()
-				// Check if any position with \ followed by space was in double quotes
-				for j := 0; j < len(arg)-1; j++ {
-					if arg[j] == '\\' && arg[j+1] == ' ' && j < len(currentArgQuoteMap) && currentArgQuoteMap[j].inDouble {
-						// Found escaped space from double-quoted fragment
-						// Unescape all such sequences in this argument
-						arg = strings.ReplaceAll(arg, `\ `, " ")
-						break
+				// Selectively unescape only backslash-spaces from double-quoted fragments
+				var result strings.Builder
+				for j := 0; j < len(arg); j++ {
+					if arg[j] == '\\' && j+1 < len(arg) && arg[j+1] == ' ' && j < len(currentArgQuoteMap) && currentArgQuoteMap[j].inDouble {
+						// This backslash-space is from a double-quoted fragment; unescape it
+						result.WriteByte(' ')
+						j++ // Skip the space
+					} else {
+						result.WriteByte(arg[j])
 					}
 				}
-				args = append(args, arg)
+				args = append(args, result.String())
 				currentArg.Reset()
 				currentArgQuoteMap = currentArgQuoteMap[:0]
 				hadQuotes = false
@@ -219,13 +221,18 @@ func parseFlagArgs(input string) ([]string, error) {
 	// Don't forget the last argument
 	if currentArg.Len() > 0 || hadQuotes {
 		arg := currentArg.String()
-		for j := 0; j < len(arg)-1; j++ {
-			if arg[j] == '\\' && arg[j+1] == ' ' && j < len(currentArgQuoteMap) && currentArgQuoteMap[j].inDouble {
-				arg = strings.ReplaceAll(arg, `\ `, " ")
-				break
+		// Selectively unescape only backslash-spaces from double-quoted fragments
+		var result strings.Builder
+		for j := 0; j < len(arg); j++ {
+			if arg[j] == '\\' && j+1 < len(arg) && arg[j+1] == ' ' && j < len(currentArgQuoteMap) && currentArgQuoteMap[j].inDouble {
+				// This backslash-space is from a double-quoted fragment; unescape it
+				result.WriteByte(' ')
+				j++ // Skip the space
+			} else {
+				result.WriteByte(arg[j])
 			}
 		}
-		args = append(args, arg)
+		args = append(args, result.String())
 	}
 
 	return args, nil
