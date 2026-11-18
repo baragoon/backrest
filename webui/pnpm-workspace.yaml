@@ -1,5 +1,4 @@
 allowBuilds:
   '@parcel/watcher': true
-  all: true
   esbuild: true
   protobufjs: true

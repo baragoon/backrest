@@ -63,7 +63,7 @@ this.ai = new GoogleGenAI({ apiKey });
 ✅ Script parsing: Loads and validates correctly
 
 **Live API Testing:**
-The Gemini translation script requires a valid API key and **Node.js 22 or later** (a runtime requirement imposed by @google/genai 3.4.0, not just an API key prerequisite). To verify the migration:
+The Gemini translation script requires a valid API key and **Node.js 22.12.0 or later** (a runtime requirement imposed by @google/genai 3.4.0, not just an API key prerequisite). To verify the migration:
 ```bash
 # Ensure you are using Node.js 22 or later
 node --version  # Should show v22.x.x or later

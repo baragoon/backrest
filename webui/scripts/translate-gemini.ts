@@ -69,9 +69,19 @@ type ReviewResult =
   | { id: string; ok: true }
   | { id: string; ok?: false; newTranslation: string; explanation: string };
 
+// JSON Schema type for validation
+interface JsonSchema {
+  type?: string;
+  items?: JsonSchema & { oneOf?: JsonSchema[] };
+  properties?: Record<string, JsonSchema & { enum?: unknown[] }>;
+  required?: string[];
+  enum?: unknown[];
+  oneOf?: JsonSchema[];
+}
+
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
-const translationSchema = {
+const translationSchema: JsonSchema = {
   type: 'array',
   items: {
     type: 'object',
@@ -83,7 +93,7 @@ const translationSchema = {
   },
 };
 
-const reprocessSchema = {
+const reprocessSchema: JsonSchema = {
   type: 'array',
   items: {
     oneOf: [
@@ -240,7 +250,7 @@ class GeminiClient {
     this.ai = new GoogleGenAI({ apiKey });
   }
 
-  private async call<T>(prompt: string, schema: any, expectedIds: string[]): Promise<T> {
+  private async call<T>(prompt: string, schema: JsonSchema, expectedIds: string[]): Promise<T> {
     let lastErr: any;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
@@ -254,11 +264,11 @@ class GeminiClient {
         });
         const text = result.text;
         if (!text) throw new Error('Empty response from Gemini API');
-        const parsed = JSON.parse(text) as T;
+        const parsed: unknown = JSON.parse(text);
         // Validate the parsed result against the schema to catch API responses
         // that don't strictly adhere to the generated schema
         this.validateResult(parsed, schema, expectedIds);
-        return parsed;
+        return parsed as T;
       } catch (err: any) {
         lastErr = err;
         if (attempt === MAX_RETRIES) break;
@@ -270,13 +280,17 @@ class GeminiClient {
     throw lastErr;
   }
 
-  private validateResult(parsed: any, schema: any, expectedIds: string[]): void {
+  private validateResult(parsed: unknown, schema: JsonSchema, expectedIds: string[]): void {
     if (!Array.isArray(parsed)) {
       throw new Error('Expected an array from Gemini API');
     }
     const remaining = new Set(expectedIds);
     for (const item of parsed) {
-      if (!item || typeof item !== 'object' || !remaining.delete(item.id)) {
+      if (!item || typeof item !== 'object' || !('id' in item)) {
+        throw new Error('Invalid result item: missing id');
+      }
+      const typedItem = item as Record<string, unknown>;
+      if (!remaining.delete(String(typedItem.id))) {
         throw new Error('Unexpected or duplicate result ID');
       }
     }
@@ -287,13 +301,13 @@ class GeminiClient {
     if (schema.type === 'array' && Array.isArray(parsed)) {
       if (schema.items?.oneOf) {
         for (const item of parsed) {
-          this.validateOneOf(item, schema.items.oneOf);
+          this.validateOneOf(item as unknown, schema.items.oneOf);
         }
       }
     }
   }
 
-  private validateOneOf(item: any, oneOfSchemas: any[]): void {
+  private validateOneOf(item: unknown, oneOfSchemas: JsonSchema[]): void {
     const matches = oneOfSchemas.filter((schema) => this.matchesSchema(item, schema));
     if (matches.length !== 1) {
       throw new Error(
@@ -302,47 +316,51 @@ class GeminiClient {
     }
   }
 
-  private matchesSchema(obj: any, schema: any): boolean {
-    if (schema.properties) {
-      const required = schema.required || [];
-      for (const field of required) {
-        if (!(field in obj)) {
-          return false;
-        }
-        // Validate field type matches schema
-        const fieldDef = schema.properties[field];
-        if (fieldDef?.type) {
-          const actualType = Array.isArray(obj[field]) ? 'array' : typeof obj[field];
-          if (actualType !== fieldDef.type) {
-            return false;
-          }
-        }
-        // Check enum constraints if present
-        if (fieldDef?.enum) {
-          if (!fieldDef.enum.includes(obj[field])) {
-            return false;
-          }
-        }
-      }
-
-      // Enforce mutual exclusivity: if this is an approval schema (ok: true),
-      // reject items that also have correction fields
-      if (schema.properties.ok && schema.required?.includes('ok')) {
-        if ('newTranslation' in obj || 'explanation' in obj) {
-          return false;
-        }
-      }
-
-      // If this is a correction schema, reject items that have approval fields
-      if (schema.properties.newTranslation && schema.required?.includes('newTranslation')) {
-        if ('ok' in obj) {
-          return false;
-        }
-      }
-
-      return true;
+  private matchesSchema(obj: unknown, schema: JsonSchema): boolean {
+    if (typeof obj !== 'object' || obj === null) {
+      return false;
     }
-    return false;
+    if (!schema.properties) {
+      return false;
+    }
+    const typedObj = obj as Record<string, unknown>;
+    const required = schema.required || [];
+    for (const field of required) {
+      if (!(field in typedObj)) {
+        return false;
+      }
+      // Validate field type matches schema
+      const fieldDef = schema.properties[field];
+      if (fieldDef?.type) {
+        const actualType = Array.isArray(typedObj[field]) ? 'array' : typeof typedObj[field];
+        if (actualType !== fieldDef.type) {
+          return false;
+        }
+      }
+      // Check enum constraints if present
+      if (fieldDef?.enum) {
+        if (!fieldDef.enum.includes(typedObj[field])) {
+          return false;
+        }
+      }
+    }
+
+    // Enforce mutual exclusivity: if this is an approval schema (ok: true),
+    // reject items that also have correction fields
+    if (schema.properties.ok && schema.required?.includes('ok')) {
+      if ('newTranslation' in typedObj || 'explanation' in typedObj) {
+        return false;
+      }
+    }
+
+    // If this is a correction schema, reject items that have approval fields
+    if (schema.properties.newTranslation && schema.required?.includes('newTranslation')) {
+      if ('ok' in typedObj) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private translatePrompt(lang: string, items: TranslationItem[]): string {
@@ -798,6 +816,12 @@ async function main() {
     process.exitCode = totalFailed > 0 ? 1 : 0;
   } catch (err) {
     console.error('Error during project load or processing:', err);
+    try {
+      console.error('Saving project to disk before exit...');
+      await project.save(PROJECT_PATH);
+    } catch (saveErr) {
+      console.error('Failed to save project on error:', saveErr);
+    }
     process.exitCode = 1;
   } finally {
     if (autosave) {
