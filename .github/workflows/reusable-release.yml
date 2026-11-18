@@ -7,13 +7,13 @@ on:
         description: "Run as a snapshot release"
         required: true
         type: boolean
-    secrets:
-      DOCKERHUB_USERNAME:
-        required: false
-      DOCKERHUB_TOKEN:
-        required: false
-      # HOMEBREW_GITHUB_TOKEN:
-      #   required: false
+    # secrets:
+    #   DOCKERHUB_USERNAME:
+    #     required: false
+    #   DOCKERHUB_TOKEN:
+    #     required: false
+    #   HOMEBREW_GITHUB_TOKEN:
+    #     required: false
 
 jobs:
   goreleaser:
