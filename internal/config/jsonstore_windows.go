@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"unsafe"
 
 	v1 "github.com/baragoon/backrest/gen/go/v1"
 	"github.com/hectane/go-acl"
@@ -23,6 +24,68 @@ import (
 var (
 	configKeepVersions = 10
 )
+
+// buildRestrictiveSecurityDescriptor creates a security descriptor that allows
+// only the owner full access and denies all other access. This is used for
+// temporary files to prevent information disclosure.
+func buildRestrictiveSecurityDescriptor(ownerSID *windows.SID) (*windows.SECURITY_DESCRIPTOR, error) {
+	// Create an empty DACL.
+	acl, err := windows.NewACL(16) // Start with 16-byte capacity
+	if err != nil {
+		return nil, fmt.Errorf("create ACL: %w", err)
+	}
+
+	// Add an ACE that grants the owner full control (0x1f01ff).
+	if err := acl.GrantSid(0x1f01ff, ownerSID); err != nil {
+		return nil, fmt.Errorf("grant owner access: %w", err)
+	}
+
+	// Create a security descriptor and assign the DACL.
+	sd, err := windows.NewSecurityDescriptor()
+	if err != nil {
+		return nil, fmt.Errorf("create security descriptor: %w", err)
+	}
+
+	if err := sd.SetDACL(acl, true, false); err != nil {
+		return nil, fmt.Errorf("set DACL: %w", err)
+	}
+
+	return sd, nil
+}
+
+// createFileWithSD creates a file with a specified security descriptor.
+// It uses windows.CreateFile with exclusive creation and fails if the file exists.
+func createFileWithSD(path string, sd *windows.SECURITY_DESCRIPTOR) (*os.File, error) {
+	pathUTF16, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return nil, fmt.Errorf("path encoding: %w", err)
+	}
+
+	// Create security attributes structure with the security descriptor.
+	sa := &windows.SecurityAttributes{
+		Length:             uint32(unsafe.Sizeof(windows.SecurityAttributes{})),
+		SecurityDescriptor: sd,
+		InheritHandle:      false,
+	}
+
+	// Use CreateFile with CREATE_NEW to ensure exclusive creation.
+	handle, err := windows.CreateFile(
+		pathUTF16,
+		windows.GENERIC_READ|windows.GENERIC_WRITE,
+		0, // No sharing
+		sa,
+		windows.CREATE_NEW, // Exclusive creation; fail if exists
+		windows.FILE_ATTRIBUTE_NORMAL,
+		0,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert Windows handle to *os.File.
+	file := os.NewFile(uintptr(handle), path)
+	return file, nil
+}
 
 // windowsTempWriter provides a Windows-compatible atomic write helper.
 // It creates a temporary file with restrictive DACL, writes data, and atomically replaces the target.
@@ -37,6 +100,8 @@ type windowsTempWriter struct {
 // with restrictive DACL (owner-only access). The ownerSID must be valid; a nil SID
 // results in an error before any file is created. Uses exclusive creation with retry
 // on collision to avoid overwriting concurrent writers' temporary files.
+// The restrictive security descriptor is applied from file creation to prevent
+// other users from opening a read handle during the creation window.
 func newWindowsTempWriter(dir, targetPath string, ownerSID *windows.SID) (*windowsTempWriter, error) {
 	if ownerSID == nil {
 		return nil, errors.New("owner SID is required")
@@ -52,28 +117,21 @@ func newWindowsTempWriter(dir, targetPath string, ownerSID *windows.SID) (*windo
 		randSuffix := hex.EncodeToString(randBytes[:])
 		tempPath := filepath.Join(dir, ".tmp."+randSuffix)
 
-		// Try to create the file exclusively. If it already exists, retry with a new suffix.
-		// Use os.OpenFile with os.O_CREATE|os.O_EXCL for exclusive creation.
-		file, err := os.OpenFile(tempPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		// Create a security descriptor with DACL allowing owner full access.
+		// This must be applied at file creation time, not afterward.
+		sd, err := buildRestrictiveSecurityDescriptor(ownerSID)
 		if err != nil {
-			if errors.Is(err, os.ErrExist) {
+			return nil, fmt.Errorf("build security descriptor: %w", err)
+		}
+
+		// Try to create the file exclusively with the restrictive security descriptor.
+		// Use windows.CreateFile for direct control over security attributes.
+		file, err := createFileWithSD(tempPath, sd)
+		if err != nil {
+			if errors.Is(err, windows.ERROR_FILE_EXISTS) {
 				continue // Collision; retry with new suffix
 			}
 			return nil, fmt.Errorf("create temp file: %w", err)
-		}
-
-		// Apply restrictive DACL: owner has full access (0x1f01ff), everyone else denied.
-		if err := acl.Apply(tempPath, true, false, acl.GrantSid(0x1f01ff, ownerSID)); err != nil {
-			// FAT and other volumes without ACLs retain the previous writable
-			// file behavior. Never hide access-denied or other ACL failures.
-			if errors.Is(err, windows.ERROR_NOT_SUPPORTED) || errors.Is(err, windows.ERROR_INVALID_FUNCTION) {
-				err = file.Chmod(0600)
-			}
-			if err != nil {
-				file.Close()
-				os.Remove(tempPath)
-				return nil, fmt.Errorf("set file permissions: %w", err)
-			}
 		}
 
 		return &windowsTempWriter{
