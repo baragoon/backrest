@@ -28,15 +28,19 @@ features:
     details: Backup to any restic supported storage (e.g. S3, B2, Azure, GCS, local, SFTP, and all rclone remotes). Cross-platform support.
 ---
 
+<!-- markdownlint-disable MD041 -->
+
 ## Installation
 
 ::: code-group
+
 ```bash [Linux (Script)]
 # Download the latest release from https://github.com/baragoon/backrest/releases
 curl -sLO https://github.com/baragoon/backrest/releases/latest/download/backrest_Linux_x86_64.tar.gz
 mkdir backrest && tar -xzvf backrest_Linux_x86_64.tar.gz -C backrest
 cd backrest && ./install.sh
 ```
+
 ```bash [Linux (systemd)]
 sudo mv backrest /usr/local/bin/backrest
 sudo tee /etc/systemd/system/backrest.service > /dev/null <<EOT
@@ -55,16 +59,19 @@ WantedBy=multi-user.target
 EOT
 sudo systemctl enable --now backrest
 ```
+
 ```bash [Arch Linux]
 paru -Sy backrest
 sudo systemctl enable --now backrest@$USER.service
 ```
+
 ```bash [MacOS (Script)]
 # Download the latest release from https://github.com/baragoon/backrest/releases
 curl -sLO https://github.com/baragoon/backrest/releases/latest/download/backrest_Darwin_arm64.tar.gz
 mkdir backrest && tar -xzvf backrest_Darwin_arm64.tar.gz -C backrest
 cd backrest && ./install.sh
 ```
+
 ```yaml [docker-compose]
 version: "3.8"
 services:
@@ -90,7 +97,11 @@ services:
       - "9898:9898"
     restart: unless-stopped
 ```
+
 :::
+
+Existing Docker Hub users should [migrate to GHCR](https://github.com/baragoon/backrest#migrating-from-docker-hub)
+to continue receiving image updates.
 
 Existing Docker Hub users should [migrate to GHCR](https://github.com/baragoon/backrest#migrating-from-docker-hub)
 to continue receiving image updates.

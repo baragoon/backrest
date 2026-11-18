@@ -1,19 +1,21 @@
+<!-- markdownlint-disable MD033 MD041 -->
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./webui/assets/logo.svg" width="400px">
     <source media="(prefers-color-scheme: light)" srcset="./webui/assets/logo-black.svg" width="400px">
-    <img src="./webui/assets/logo.svg" width="400px">
+    <img src="./webui/assets/logo.svg" width="400px" alt="Backrest logo">
   </picture>
 </p>
 
 <p align="center">
-  <img src="https://github.com/baragoon/backrest/actions/workflows/test.yml/badge.svg" />
-  <img src="https://img.shields.io/github/downloads/baragoon/backrest/total" />
+  <img src="https://github.com/baragoon/backrest/actions/workflows/test.yml/badge.svg" alt="Test workflow status" />
+  <img src="https://img.shields.io/github/downloads/baragoon/backrest/total" alt="Total GitHub downloads" />
 </p>
 
 ---
 
-**Overview**
+## Overview
 
 Backrest is a web-accessible backup solution built on top of [restic](https://restic.net/). Backrest provides a WebUI which wraps the restic CLI and makes it easy to create repos, browse snapshots, and restore files. Additionally, Backrest can run in the background and take an opinionated approach to scheduling snapshots and orchestrating repo health operations.
 
@@ -24,11 +26,12 @@ Built with Go, Backrest is distributed as a standalone, lightweight binary with 
 ## Key Features
 
 - **Web Interface**: Access locally or remotely (perfect for NAS deployments)
-- **Multi-Platform Support**: 
+- **Multi-Platform Support**:
   - Linux
   - macOS
   - Windows
   - FreeBSD
+  - [Docker](https://github.com/baragoon/backrest/pkgs/container/backrest)
   - [Docker](https://github.com/baragoon/backrest/pkgs/container/backrest)
 - **Backup Management**:
   - Import existing restic repositories
@@ -43,9 +46,9 @@ Built with Go, Backrest is distributed as a standalone, lightweight binary with 
 ## Preview
 
 <p align="center">
-   <img src="https://f000.backblazeb2.com/file/gshare/screenshots/backrest-1.11.1-dashboard.png" width="80%" />
-   <img src="https://f000.backblazeb2.com/file/gshare/screenshots/backrest-1.11.1-browse-snapshot.png" width="80%" />
-   <img src="https://f000.backblazeb2.com/file/gshare/screenshots/backrest-1.11.1-add-plan.png" width="80%" />
+   <img src="https://f000.backblazeb2.com/file/gshare/screenshots/backrest-1.11.1-dashboard.png" width="80%" alt="Backrest dashboard" />
+   <img src="https://f000.backblazeb2.com/file/gshare/screenshots/backrest-1.11.1-browse-snapshot.png" width="80%" alt="Browse a snapshot" />
+   <img src="https://f000.backblazeb2.com/file/gshare/screenshots/backrest-1.11.1-add-plan.png" width="80%" alt="Create a backup plan" />
 </p>
 
 ---
@@ -102,6 +105,7 @@ sudo systemctl enable --now backrest@$USER.service
 ## Docker
 
 Image: `ghcr.io/baragoon/backrest`.
+
 - Includes rclone and common Unix utilities
 - For a minimal image, use `ghcr.io/baragoon/backrest:scratch`
 
@@ -147,6 +151,20 @@ docker compose up -d --no-deps --force-recreate backrest
 
 These commands recreate the container without removing its volumes.
 
+### Migrating from Docker Hub
+
+Docker Hub images no longer receive updates. In your Compose file, change
+`baragoon/backrest` to `ghcr.io/baragoon/backrest`, keeping your existing tag
+(for example, `latest` or `scratch`). Ensure your configuration and data are
+stored in bind mounts or volumes, then run:
+
+```sh
+docker compose pull backrest
+docker compose up -d --no-deps --force-recreate backrest
+```
+
+These commands recreate the container without removing its volumes.
+
 ## Windows
 
 Download the Windows installer for your architecture from the [releases page](https://github.com/baragoon/backrest/releases). The installer, named `Backrest-setup-[arch].exe`, places Backrest and a GUI tray application in `%localappdata%\Programs\Backrest\`. The tray application, set to start on login, monitors Backrest.
@@ -177,7 +195,6 @@ Download the Windows installer for your architecture from the [releases page](ht
 | `BACKREST_DATA`           | Path to the data directory  | `%appdata%\backrest\data`                                                                  |
 | `BACKREST_RESTIC_COMMAND` | Path to restic binary       | Defaults to a Backrest managed version of restic in `C:\Program Files\restic\restic-x.x.x` |
 | `XDG_CACHE_HOME`          | Path to the cache directory |                                                                                            |
-
 
 # Development
 
@@ -237,6 +254,6 @@ The dev container uses Nix and direnv to provide all dependencies. When the cont
 
 ## Translations
 
-Translations are stored in [./webui/messages](./webui/messages) and are generated using [inlang](https://inlang.com/). Machine translations can be updated by running `npx @inlang/cli machine translate --project ./project.inlang`. 
+Translations are stored in [./webui/messages](./webui/messages) and are generated using [inlang](https://inlang.com/). Machine translations can be updated by running `npx @inlang/cli machine translate --project ./project.inlang`.
 
 Text is translated on a best-effort basis and is not guaranteed to be accurate. If you find any translations that are incorrect, please submit a pull request to fix them. Contributions here are greatly appreciated!
