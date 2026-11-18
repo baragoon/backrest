@@ -29,6 +29,8 @@ import (
 // - Preserves literal backslashes in single-quoted arguments
 func parseFlagArgs(input string) ([]string, error) {
 	// First pass: remove comments while preserving # inside quotes
+	// Note: backslashes only escape outside quotes and in double quotes.
+	// Inside single quotes, backslashes are literal and do not escape anything.
 	commentPos := -1
 	escaped := false
 	doubleQuoted := false
@@ -39,7 +41,8 @@ func parseFlagArgs(input string) ([]string, error) {
 			escaped = false
 			continue
 		}
-		if ch == '\\' {
+		// Backslashes only escape outside quotes and in double quotes
+		if ch == '\\' && !singleQuoted {
 			escaped = true
 			continue
 		}
@@ -70,6 +73,8 @@ func parseFlagArgs(input string) ([]string, error) {
 
 	// Second pass: scan original input to track which parts were double-quoted
 	// vs single-quoted. This determines whether to unescape \ spaces.
+	// Note: backslashes only escape in double quotes and outside quotes.
+	// Inside single quotes, backslashes are literal.
 	type argInfo struct {
 		inDouble bool
 		inSingle bool
@@ -90,7 +95,8 @@ func parseFlagArgs(input string) ([]string, error) {
 			continue
 		}
 
-		if ch == '\\' {
+		// Backslashes only escape outside quotes and in double quotes
+		if ch == '\\' && !singleQuoted {
 			currentArg.WriteRune(ch)
 			escaped = true
 			continue
