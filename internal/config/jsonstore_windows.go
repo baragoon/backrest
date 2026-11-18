@@ -35,43 +35,49 @@ type windowsTempWriter struct {
 
 // newWindowsTempWriter creates a temporary file in the same directory as the target
 // with restrictive DACL (owner-only access). The ownerSID must be valid; a nil SID
-// results in an error before any file is created. Uses a random suffix to avoid
-// collisions from concurrent writers.
+// results in an error before any file is created. Uses exclusive creation with retry
+// on collision to avoid overwriting concurrent writers' temporary files.
 func newWindowsTempWriter(dir, targetPath string, ownerSID *windows.SID) (*windowsTempWriter, error) {
 	if ownerSID == nil {
 		return nil, errors.New("owner SID is required")
 	}
 
-	// Generate a random suffix for the temp file to avoid collisions with concurrent writes.
-	// Use a short random name independent of the target path basename.
-	var randBytes [8]byte
-	if _, err := rand.Read(randBytes[:]); err != nil {
-		return nil, fmt.Errorf("generate random suffix: %w", err)
-	}
-	randSuffix := hex.EncodeToString(randBytes[:])
-	tempPath := filepath.Join(dir, ".tmp."+randSuffix)
-	
-	// Create the file. Note: os.Create creates with inherited permissions from the directory.
-	// We apply the restrictive DACL immediately after creation.
-	file, err := os.Create(tempPath)
-	if err != nil {
-		return nil, err
+	const maxRetries = 100
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Generate a random suffix for the temp file to avoid collisions with concurrent writes.
+		var randBytes [8]byte
+		if _, err := rand.Read(randBytes[:]); err != nil {
+			return nil, fmt.Errorf("generate random suffix: %w", err)
+		}
+		randSuffix := hex.EncodeToString(randBytes[:])
+		tempPath := filepath.Join(dir, ".tmp."+randSuffix)
+
+		// Try to create the file exclusively. If it already exists, retry with a new suffix.
+		// Use os.OpenFile with os.O_CREATE|os.O_EXCL for exclusive creation.
+		file, err := os.OpenFile(tempPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err != nil {
+			if errors.Is(err, os.ErrExist) {
+				continue // Collision; retry with new suffix
+			}
+			return nil, fmt.Errorf("create temp file: %w", err)
+		}
+
+		// Apply restrictive DACL: owner has full access (0x1f01ff), everyone else denied.
+		if err := acl.Apply(tempPath, true, false, acl.GrantSid(0x1f01ff, ownerSID)); err != nil {
+			file.Close()
+			os.Remove(tempPath)
+			return nil, fmt.Errorf("set file permissions: %w", err)
+		}
+
+		return &windowsTempWriter{
+			tempPath: tempPath,
+			file:     file,
+			ownerSID: ownerSID,
+			renamed:  false,
+		}, nil
 	}
 
-	// Apply restrictive DACL: owner has full access (0x1f01ff), everyone else denied.
-	// GrantSid takes: (accessMask, sid, ...)
-	if err := acl.Apply(tempPath, true, false, acl.GrantSid(0x1f01ff, ownerSID)); err != nil {
-		file.Close()
-		os.Remove(tempPath)
-		return nil, fmt.Errorf("set file permissions: %w", err)
-	}
-
-	return &windowsTempWriter{
-		tempPath: tempPath,
-		file:     file,
-		ownerSID: ownerSID,
-		renamed:  false,
-	}, nil
+	return nil, fmt.Errorf("failed to create temp file after %d attempts", maxRetries)
 }
 
 // Write writes data to the temporary file.
@@ -87,9 +93,8 @@ func (w *windowsTempWriter) CloseAtomicallyReplace(targetPath string) error {
 	}
 
 	// Atomically replace the target with the temp file using os.Rename.
-	// On Windows, os.Rename removes the destination if it exists before renaming.
+	// os.Rename replaces the destination if it exists.
 	if err := os.Rename(w.tempPath, targetPath); err != nil {
-		os.Remove(w.tempPath)
 		return err
 	}
 

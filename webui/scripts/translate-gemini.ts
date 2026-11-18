@@ -312,6 +312,22 @@ class GeminiClient {
           }
         }
       }
+
+      // Enforce mutual exclusivity: if this is an approval schema (ok: true),
+      // reject items that also have correction fields
+      if (schema.properties.ok && schema.required?.includes('ok')) {
+        if ('newTranslation' in obj || 'explanation' in obj) {
+          return false;
+        }
+      }
+
+      // If this is a correction schema, reject items that have approval fields
+      if (schema.properties.newTranslation && schema.required?.includes('newTranslation')) {
+        if ('ok' in obj) {
+          return false;
+        }
+      }
+
       return true;
     }
     return false;
@@ -726,28 +742,31 @@ async function main() {
   const gemini = new GeminiClient(process.env.GEMINI_API_KEY);
   const project = new TranslationProject();
 
-  console.error(`Mode: ${mode}`);
-  console.error('Loading project...');
-  await project.load(PROJECT_PATH);
-
-  const targetLangs = project.targetLangs;
-  if (targetLangs.length === 0) {
-    console.log('No target languages configured. Nothing to do.');
-    process.exit(0);
-  }
-
-  console.error(`Source: ${project.sourceLang} → Targets: ${targetLangs.join(', ')}`);
-
-  // Periodically flush new edits to disk so an interrupted long run isn't lost.
-  const autosave = setInterval(() => {
-    project
-      .saveIfDirty(PROJECT_PATH)
-      .then((saved) => saved && console.error('[autosave] saved.'))
-      .catch((err) => console.error(`[autosave] failed: ${err.message}`));
-  }, 60_000);
-  autosave.unref();
+  let autosave: NodeJS.Timeout | undefined;
 
   try {
+    console.error(`Mode: ${mode}`);
+    console.error('Loading project...');
+    await project.load(PROJECT_PATH);
+
+    const targetLangs = project.targetLangs;
+    if (targetLangs.length === 0) {
+      console.log('No target languages configured. Nothing to do.');
+      process.exitCode = 0;
+      return;
+    }
+
+    console.error(`Source: ${project.sourceLang} → Targets: ${targetLangs.join(', ')}`);
+
+    // Periodically flush new edits to disk so an interrupted long run isn't lost.
+    autosave = setInterval(() => {
+      project
+        .saveIfDirty(PROJECT_PATH)
+        .then((saved) => saved && console.error('[autosave] saved.'))
+        .catch((err) => console.error(`[autosave] failed: ${err.message}`));
+    }, 60_000);
+    autosave.unref();
+
     let totalFailed = 0;
     if (isReprocess) {
       const reviewer = new UserReviewer();
@@ -763,10 +782,15 @@ async function main() {
     console.error('Saving project to disk...');
     await project.save(PROJECT_PATH);
     console.error('Done.');
-    
+
     process.exitCode = totalFailed > 0 ? 1 : 0;
+  } catch (err) {
+    console.error('Error during project load or processing:', err);
+    process.exitCode = 1;
   } finally {
-    clearInterval(autosave);
+    if (autosave) {
+      clearInterval(autosave);
+    }
     project.close();
   }
 }

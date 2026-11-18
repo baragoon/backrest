@@ -21,6 +21,36 @@ var (
 	configKeepVersions = 10
 )
 
+// createTempFileWithCleanup creates a temporary file for targetPath, cleaning up orphaned
+// temporary files associated with targetPath on creation failure, then retrying.
+// Only temp files matching the naming pattern for targetPath are removed.
+func createTempFileWithCleanup(dir, targetPath string) (*renameio.PendingFile, error) {
+	pf, err := renameio.TempFile(dir, targetPath)
+	if err == nil {
+		return pf, nil
+	}
+
+	// TempFile failed. Try to clean up orphaned temp files for this specific target,
+	// then retry once. This addresses the case where a previous write crashed leaving
+	// an orphaned temp file, which prevents new temp file creation.
+	// We only remove files matching the temp pattern for this specific target path.
+	basename := filepath.Base(targetPath)
+	pattern := filepath.Join(dir, ".tmp."+basename+"*")
+	matches, globErr := filepath.Glob(pattern)
+	if globErr == nil {
+		for _, match := range matches {
+			os.Remove(match)
+		}
+	}
+
+	// Retry once after cleanup
+	pf, retryErr := renameio.TempFile(dir, targetPath)
+	if retryErr != nil {
+		return nil, retryErr
+	}
+	return pf, nil
+}
+
 type JsonFileStore struct {
 	Path string
 	mu   sync.Mutex
@@ -98,7 +128,7 @@ func (f *JsonFileStore) update(config *v1.Config) error {
 		return fmt.Errorf("backup config file: %w", err)
 	}
 
-	t, err := renameio.TempFile(filepath.Dir(f.Path), f.Path)
+	t, err := createTempFileWithCleanup(filepath.Dir(f.Path), f.Path)
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}
@@ -126,7 +156,7 @@ func (f *JsonFileStore) makeBackup() error {
 
 	// backup the current config file
 	backupName := fmt.Sprintf("%s.bak.%s", f.Path, time.Now().Format("2006-01-02-15-04-05"))
-	t, err := renameio.TempFile(filepath.Dir(backupName), backupName)
+	t, err := createTempFileWithCleanup(filepath.Dir(backupName), backupName)
 	if err != nil {
 		return err
 	}
