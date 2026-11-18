@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
       }),
       react(),
       tsconfigPaths(),
-      viteCompression({ algorithm: 'gzip', ext: '.gz', deleteOriginFile: true }),
+      viteCompression({ algorithms: ['gzip'], deleteOriginalAssets: true }),
       // viteCompression({ algorithm: 'brotliCompress', ext: '.br' }),
       // visualizer({
       //   open: false,

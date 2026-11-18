@@ -43,7 +43,8 @@ func (commandHandler) Execute(ctx context.Context, h *v1.Hook, vars interface{},
 		if nextLine == -1 {
 			nextLine = len(command)
 		}
-		shell, err = shellquote.Split(strings.Trim(command[2:nextLine], " "))
+		shebang := strings.TrimRight(command[2:nextLine], " \r")
+		shell, err = shellquote.Split(shebang)
 		if err != nil {
 			return fmt.Errorf("parsing shell for command: %w", err)
 		} else if len(shell) == 0 {

@@ -109,11 +109,6 @@ func (f *JsonFileStore) update(config *v1.Config) error {
 		return fmt.Errorf("close temp file: %w", err)
 	}
 
-	// only the user running backrest should be able to read the config.
-	if err := os.Chmod(f.Path, 0600); err != nil {
-		return fmt.Errorf("chmod(0600) config file: %w", err)
-	}
-
 	return nil
 }
 
@@ -139,10 +134,6 @@ func (f *JsonFileStore) makeBackup() error {
 	}
 
 	if err := t.CloseAtomicallyReplace(); err != nil {
-		return err
-	}
-
-	if err := os.Chmod(backupName, 0600); err != nil {
 		return err
 	}
 

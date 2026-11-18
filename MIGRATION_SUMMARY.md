@@ -57,27 +57,29 @@ this.ai = new GoogleGenAI({ apiKey });
 
 ## Verification
 
+**Local Checks (Performed):**
 ✅ TypeScript compilation: `pnpm run check` - **PASSED**
 ✅ Project build: `pnpm run build` - **PASSED**
 ✅ Script parsing: Loads and validates correctly
-✅ Functionality preserved: Same schema-validated JSON responses
 
-## Compatibility
-
-- **Same functionality**: Send prompts with JSON schema validation and get structured responses
-- **Variable preservation**: Still correctly handles `{variable}` placeholders in translations
-- **Backward compatibility**: The public API of `GeminiClient` remains unchanged
-- **Error handling**: Maintains existing retry logic with exponential backoff
-
-## Testing
-
-To test the migration with the actual API:
+**Live API Testing:**
+The Gemini translation script requires a valid API key and **Node.js 22 or later** (a runtime requirement imposed by @google/genai 3.4.0, not just an API key prerequisite). To verify the migration:
 ```bash
+# Ensure you are using Node.js 22 or later
+node --version  # Should show v22.x.x or later
+
 export GEMINI_API_KEY='your-api-key'
 cd webui
 pnpm run translate
 # or for reprocessing mode:
 pnpm run translate-reprocess
+```
+
+**API Behavior:**
+- Request and response schema structure updated to match @google/genai 3.4.0 requirements
+- Both `translate` and `translate-reprocess` commands use `responseJsonSchema` with strict validation
+- The SDK's `oneOf` discriminator behavior for reprocess results is preserved in schema definition
+- Variable placeholders and error handling updated to match new API response format
 ```
 
 The commands should work identically to before the migration.

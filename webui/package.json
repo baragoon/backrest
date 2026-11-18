@@ -2,6 +2,9 @@
   "name": "backrest",
   "version": "1.0.0",
   "description": "",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "start": "UI_BACKEND_URL=http://localhost:9898 vite",
     "clean": "rimraf dist",

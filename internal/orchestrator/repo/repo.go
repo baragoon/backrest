@@ -22,6 +22,53 @@ import (
 	"go.uber.org/zap"
 )
 
+// parseFlagArgs parses flag arguments with comment and escaped-space handling
+// compatible with the previous shlex-based behavior.
+// - Removes unquoted comments (text after # outside quotes)
+// - Unescapes backslash-escaped spaces within double quotes
+func parseFlagArgs(input string) ([]string, error) {
+	// Remove comments: find # outside of quotes
+	var commentPos int
+	inQuote := false
+	escaped := false
+	for i, ch := range input {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if ch == '\\' {
+			escaped = true
+			continue
+		}
+		if ch == '"' {
+			inQuote = !inQuote
+			continue
+		}
+		if ch == '#' && !inQuote {
+			commentPos = i
+			break
+		}
+	}
+	if commentPos > 0 {
+		input = input[:commentPos]
+	}
+
+	// Split arguments
+	args, err := shellquote.Split(strings.TrimSpace(input))
+	if err != nil {
+		return nil, err
+	}
+
+	// Unescape backslash-escaped spaces within double-quoted arguments
+	for i, arg := range args {
+		if strings.Contains(arg, `\ `) {
+			args[i] = strings.ReplaceAll(arg, `\ `, " ")
+		}
+	}
+
+	return args, nil
+}
+
 // RepoOrchestrator implements higher level repository operations on top of
 // the restic package. It can be thought of as a controller for a repo.
 type RepoOrchestrator struct {
@@ -60,7 +107,7 @@ func NewRepoOrchestrator(config *v1.Config, repoConfig *v1.Repo, resticPath stri
 	}
 
 	for _, f := range repoConfig.GetFlags() {
-		args, err := shellquote.Split(ExpandEnv(f))
+		args, err := parseFlagArgs(ExpandEnv(f))
 		if err != nil {
 			return nil, fmt.Errorf("parse flag %q for repo %q: %w", f, repoConfig.Id, err)
 		}
@@ -173,7 +220,7 @@ func (r *RepoOrchestrator) Backup(ctx context.Context, plan *v1.Plan, dryRun boo
 	}
 
 	for _, f := range plan.GetBackupFlags() {
-		args, err := shellquote.Split(f)
+		args, err := parseFlagArgs(f)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse backup flag %q for plan %q: %w", f, plan.Id, err)
 		}
@@ -416,7 +463,7 @@ func (r *RepoOrchestrator) RunCommand(ctx context.Context, command string, write
 	defer flush()
 
 	r.logger(ctx).Debug("running command", zap.String("command", command))
-	args, err := shellquote.Split(command)
+	args, err := parseFlagArgs(command)
 	if err != nil {
 		return fmt.Errorf("parse command: %w", err)
 	}
