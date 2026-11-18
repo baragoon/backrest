@@ -15,7 +15,6 @@ import (
 	"unsafe"
 
 	v1 "github.com/baragoon/backrest/gen/go/v1"
-	"github.com/hectane/go-acl"
 	"golang.org/x/sys/windows"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -29,15 +28,22 @@ var (
 // only the owner full access and denies all other access. This is used for
 // temporary files to prevent information disclosure.
 func buildRestrictiveSecurityDescriptor(ownerSID *windows.SID) (*windows.SECURITY_DESCRIPTOR, error) {
-	// Create an ACL with an explicit grant for the owner.
-	acl, err := windows.ACLFromEntries([]windows.ACLEntry{
+	// Create an ACL with an explicit grant for the owner using SetEntriesInAcl.
+	entries := []windows.ExplicitAccess{
 		{
-			AccessMode: windows.GRANT_ACCESS,
-			AccessMask: 0x1f01ff, // Full control
-			Inheritance: windows.NO_INHERITANCE,
-			SID: ownerSID,
+			AccessPermissions: 0x1f01ff, // Full control (FILE_ALL_ACCESS)
+			AccessMode:        windows.GRANT_ACCESS,
+			Inheritance:       windows.NO_INHERITANCE,
+			Trustee: windows.Trustee{
+				MultipleTrusteeOperation: windows.NO_MULTIPLE_TRUSTEE,
+				TrusteeForm:              windows.TRUSTEE_IS_SID,
+				TrusteeType:              windows.TRUSTEE_IS_USER,
+				TrusteeValue:             windows.TrusteeValueFromSID(ownerSID),
+			},
 		},
-	})
+	}
+
+	acl, err := windows.SetEntriesInAcl(entries)
 	if err != nil {
 		return nil, fmt.Errorf("create ACL: %w", err)
 	}
