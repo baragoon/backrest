@@ -282,12 +282,12 @@ class GeminiClient {
   }
 
   private validateOneOf(item: any, oneOfSchemas: any[]): void {
-    for (const schema of oneOfSchemas) {
-      if (this.matchesSchema(item, schema)) {
-        return; // Valid
-      }
+    const matches = oneOfSchemas.filter((schema) => this.matchesSchema(item, schema));
+    if (matches.length !== 1) {
+      throw new Error(
+        `Item must match exactly one schema in oneOf (matched ${matches.length}): ${JSON.stringify(item)}`
+      );
     }
-    throw new Error(`Item does not match any schema in oneOf: ${JSON.stringify(item)}`);
   }
 
   private matchesSchema(obj: any, schema: any): boolean {
@@ -297,9 +297,17 @@ class GeminiClient {
         if (!(field in obj)) {
           return false;
         }
+        // Validate field type matches schema
+        const fieldDef = schema.properties[field];
+        if (fieldDef?.type) {
+          const actualType = Array.isArray(obj[field]) ? 'array' : typeof obj[field];
+          if (actualType !== fieldDef.type) {
+            return false;
+          }
+        }
         // Check enum constraints if present
-        if (schema.properties[field]?.enum) {
-          if (!schema.properties[field].enum.includes(obj[field])) {
+        if (fieldDef?.enum) {
+          if (!fieldDef.enum.includes(obj[field])) {
             return false;
           }
         }
@@ -514,6 +522,12 @@ class TranslationProject {
     } catch (err) {
       this._dirty = true; // leave dirty so the next tick retries
       throw err;
+    }
+  }
+
+  close(): void {
+    if (this.project?.close) {
+      this.project.close();
     }
   }
 }
@@ -753,6 +767,7 @@ async function main() {
     process.exitCode = totalFailed > 0 ? 1 : 0;
   } finally {
     clearInterval(autosave);
+    project.close();
   }
 }
 

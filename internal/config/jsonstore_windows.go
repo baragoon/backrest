@@ -4,6 +4,8 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -28,24 +30,35 @@ type windowsTempWriter struct {
 	tempPath string
 	file     *os.File
 	ownerSID *windows.SID
+	renamed  bool
 }
 
 // newWindowsTempWriter creates a temporary file in the same directory as the target
 // with restrictive DACL (owner-only access). The ownerSID must be valid; a nil SID
-// results in an error before any file is created.
+// results in an error before any file is created. Uses a random suffix to avoid
+// collisions from concurrent writers.
 func newWindowsTempWriter(dir, targetPath string, ownerSID *windows.SID) (*windowsTempWriter, error) {
 	if ownerSID == nil {
 		return nil, errors.New("owner SID is required")
 	}
 
-	// Create a temporary file with a unique name in the target directory
-	tempPath := filepath.Join(dir, ".tmp."+filepath.Base(targetPath)+"."+time.Now().Format("20060102-150405"))
+	// Generate a random suffix for the temp file to avoid collisions with concurrent writes.
+	// Use a short random name independent of the target path basename.
+	var randBytes [8]byte
+	if _, err := rand.Read(randBytes[:]); err != nil {
+		return nil, fmt.Errorf("generate random suffix: %w", err)
+	}
+	randSuffix := hex.EncodeToString(randBytes[:])
+	tempPath := filepath.Join(dir, ".tmp."+randSuffix)
+	
+	// Create the file. Note: os.Create creates with inherited permissions from the directory.
+	// We apply the restrictive DACL immediately after creation.
 	file, err := os.Create(tempPath)
 	if err != nil {
 		return nil, err
 	}
 
-	// Apply restrictive DACL: owner has full access (0x1f01ff), everyone else denied
+	// Apply restrictive DACL: owner has full access (0x1f01ff), everyone else denied.
 	// GrantSid takes: (accessMask, sid, ...)
 	if err := acl.Apply(tempPath, true, false, acl.GrantSid(0x1f01ff, ownerSID)); err != nil {
 		file.Close()
@@ -57,6 +70,7 @@ func newWindowsTempWriter(dir, targetPath string, ownerSID *windows.SID) (*windo
 		tempPath: tempPath,
 		file:     file,
 		ownerSID: ownerSID,
+		renamed:  false,
 	}, nil
 }
 
@@ -72,19 +86,25 @@ func (w *windowsTempWriter) CloseAtomicallyReplace(targetPath string) error {
 		return err
 	}
 
-	// Atomically replace the target with the temp file
+	// Atomically replace the target with the temp file using os.Rename.
+	// On Windows, os.Rename removes the destination if it exists before renaming.
 	if err := os.Rename(w.tempPath, targetPath); err != nil {
 		os.Remove(w.tempPath)
 		return err
 	}
 
+	// Mark this writer as having successfully renamed; Cleanup should not remove tempPath now.
+	w.renamed = true
 	return nil
 }
 
-// Cleanup removes the temporary file if it still exists.
+// Cleanup removes the temporary file if it still exists and was not successfully renamed.
+// Once CloseAtomicallyReplace succeeds, this is a no-op for the successful path.
 func (w *windowsTempWriter) Cleanup() {
 	w.file.Close()
-	os.Remove(w.tempPath)
+	if !w.renamed {
+		os.Remove(w.tempPath)
+	}
 }
 
 // getOwnerSID returns the SID of the current process owner.

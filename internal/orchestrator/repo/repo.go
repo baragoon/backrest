@@ -155,12 +155,14 @@ func parseFlagArgs(input string) ([]string, error) {
 		}
 
 		if ch == '"' && !singleQuoted {
-			if !doubleQuoted && fragmentHasEscSpInDouble {
-				// We're exiting a double-quoted section that had escaped spaces
+			// Record escaped-space metadata for the fragment we're leaving (if exiting double quotes)
+			if doubleQuoted && fragmentHasEscSpInDouble {
+				// Exiting a double-quoted section that had escaped spaces
 				if _, ok := argMeta[currentArgIndex]; !ok {
 					argMeta[currentArgIndex] = &argMetadata{}
 				}
 				argMeta[currentArgIndex].hasEscSpInDouble = true
+				fragmentHasEscSpInDouble = false
 			}
 			doubleQuoted = !doubleQuoted
 			continue
