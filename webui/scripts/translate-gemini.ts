@@ -750,10 +750,7 @@ async function main() {
     await project.save(PROJECT_PATH);
     console.error('Done.');
     
-    if (totalFailed > 0) {
-      process.exit(1);
-    }
-    process.exit(0);
+    process.exitCode = totalFailed > 0 ? 1 : 0;
   } finally {
     clearInterval(autosave);
   }
