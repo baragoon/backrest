@@ -81,7 +81,7 @@ const translationSchema = {
     },
     required: ['id', 'translation'],
   },
-} as any;
+} satisfies any;
 
 const reprocessSchema = {
   type: 'array',
@@ -106,7 +106,7 @@ const reprocessSchema = {
       },
     ],
   },
-} as any;
+} satisfies any;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -563,6 +563,7 @@ async function runReprocess(
 ): Promise<void> {
   let totalAccepted = 0;
   let totalSkipped = 0;
+  let totalFailed = 0;
 
   const work = buildWork(
     project.targetLangs,
@@ -588,9 +589,18 @@ async function runReprocess(
       console.error(
         `\n[${w.lang}] ERROR: batch ${w.batchIndex + 1}/${w.batchCount} failed after retries: ${err.message}`,
       );
-      return [] as ReviewResult[];
+      return null; // Indicate batch was not reviewed
     }
   })) {
+    // If batch failed, record as unreviewed and skip processing
+    if (result === null) {
+      process.stderr.write(
+        `[${w.lang}] Batch ${w.batchIndex + 1}/${w.batchCount}: unreviewed (failed to fetch).\n`,
+      );
+      totalFailed++;
+      continue;
+    }
+
     const suggestions = result.filter(
       (r): r is { id: string; newTranslation: string; explanation: string } =>
         'newTranslation' in r && !!r.newTranslation,
@@ -631,7 +641,13 @@ async function runReprocess(
     }
   }
 
-  console.log(`\nReview complete. ${totalAccepted} accepted, ${totalSkipped} skipped.`);
+  if (totalFailed > 0) {
+    console.log(
+      `\nReview complete. ${totalAccepted} accepted, ${totalSkipped} skipped, ${totalFailed} batches failed.`,
+    );
+  } else {
+    console.log(`\nReview complete. ${totalAccepted} accepted, ${totalSkipped} skipped.`);
+  }
 }
 
 async function main() {
