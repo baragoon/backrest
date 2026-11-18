@@ -19,6 +19,9 @@ func TestParseFlagArgsCompatibility(t *testing.T) {
 		{`  first   "two\ words"`, []string{"first", "two words"}},
 		{`""  ''  "two\ words"`, []string{"", "", "two words"}},
 		{`"two  spaces"  "three\ words"`, []string{"two  spaces", "three words"}},
+		// Edge cases from review comments
+		{`--config=/path#1.conf`, []string{`--config=/path#1.conf`}}, // embedded hash not at word boundary
+		{`'single\ text'"double"`, []string{`single\ textdouble`}}, // mixed quotes preserve single-quoted space
 	} {
 		got, err := parseFlagArgs(tc.input)
 		if err != nil || !reflect.DeepEqual(got, tc.want) {
@@ -26,3 +29,4 @@ func TestParseFlagArgsCompatibility(t *testing.T) {
 		}
 	}
 }
+

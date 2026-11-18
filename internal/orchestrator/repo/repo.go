@@ -18,7 +18,6 @@ import (
 	"github.com/baragoon/backrest/internal/orchestrator/logging"
 	"github.com/baragoon/backrest/internal/protoutil"
 	"github.com/baragoon/backrest/pkg/restic"
-	"github.com/kballard/go-shellquote"
 	"go.uber.org/zap"
 )
 
@@ -127,87 +126,86 @@ func parseFlagArgs(input string) ([]string, error) {
 
 	input = normalized.String()
 
-	// Split arguments (this uses space, tab, and newline as separators)
-	args, err := shellquote.Split(input)
-	if err != nil {
-		return nil, err
+	// Split arguments with careful tracking of quote contexts.
+	// We need to know which parts of each result came from double vs single quotes
+	// so we can correctly handle escaped spaces.
+
+	type positionInfo struct {
+		inDouble bool
+		inSingle bool
 	}
 
-	// Second pass: scan the input string and for each argument, determine whether
-	// it contains an escaped space that originated in a double-quoted fragment.
-	// We need per-fragment tracking because an argument may combine single- and double-quoted
-	// fragments: 'single\ text'"double" should NOT unescape the space in the single part.
+	var args []string
+	var currentArg strings.Builder
+	var currentArgQuoteMap []positionInfo // tracks quote context for each unquoted char
+	var hadQuotes bool                    // track if current argument had any quotes (even if empty)
 
-	type argMetadata struct {
-		hasEscSpInDouble bool
-	}
-	argMeta := make(map[int]*argMetadata)
-
-	escaped = false
-	doubleQuoted = false
-	singleQuoted = false
-	currentArgIndex := 0
-	inWord := false
-
-	// Track whether the current fragment (before the next quote change) has an escaped space in double quotes
-	fragmentHasEscSpInDouble := false
+	esc2 := false
+	dq2 := false
+	sq2 := false
 
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
 
-		if escaped {
-			escaped = false
+		if esc2 {
+			currentArg.WriteByte(ch)
+			currentArgQuoteMap = append(currentArgQuoteMap, positionInfo{inDouble: dq2, inSingle: sq2})
+			esc2 = false
 			continue
 		}
 
-		if ch == '\\' && !singleQuoted {
-			inWord = true
-			escaped = true
-			// If we're in double quotes and the next char is a space, mark it
-			if doubleQuoted && i+1 < len(input) && input[i+1] == ' ' {
-				fragmentHasEscSpInDouble = true
-			}
+		if ch == '\\' && !sq2 {
+			esc2 = true
 			continue
 		}
 
-		if ch == '"' && !singleQuoted {
-			inWord = true
-			// Record escaped-space metadata for the fragment we're leaving (if exiting double quotes)
-			if doubleQuoted && fragmentHasEscSpInDouble {
-				// Exiting a double-quoted section that had escaped spaces
-				if _, ok := argMeta[currentArgIndex]; !ok {
-					argMeta[currentArgIndex] = &argMetadata{}
+		if ch == '"' && !sq2 {
+			hadQuotes = true
+			dq2 = !dq2
+			continue
+		}
+
+		if ch == '\'' && !dq2 {
+			hadQuotes = true
+			sq2 = !sq2
+			continue
+		}
+
+		if !dq2 && !sq2 && (ch == ' ' || ch == '\t' || ch == '\n') {
+			if currentArg.Len() > 0 || hadQuotes {
+				// Process this argument: unescape \ spaces only from double-quoted fragments
+				arg := currentArg.String()
+				// Check if any position with \ followed by space was in double quotes
+				for j := 0; j < len(arg)-1; j++ {
+					if arg[j] == '\\' && arg[j+1] == ' ' && j < len(currentArgQuoteMap) && currentArgQuoteMap[j].inDouble {
+						// Found escaped space from double-quoted fragment
+						// Unescape all such sequences in this argument
+						arg = strings.ReplaceAll(arg, `\ `, " ")
+						break
+					}
 				}
-				argMeta[currentArgIndex].hasEscSpInDouble = true
-				fragmentHasEscSpInDouble = false
+				args = append(args, arg)
+				currentArg.Reset()
+				currentArgQuoteMap = currentArgQuoteMap[:0]
+				hadQuotes = false
 			}
-			doubleQuoted = !doubleQuoted
 			continue
 		}
 
-		if ch == '\'' && !doubleQuoted {
-			inWord = true
-			singleQuoted = !singleQuoted
-			continue
-		}
-
-		if !doubleQuoted && !singleQuoted && (ch == ' ' || ch == '\t' || ch == '\n') {
-			// Advance once per completed word, including explicitly empty quotes.
-			if inWord {
-				currentArgIndex++
-			}
-			inWord = false
-			fragmentHasEscSpInDouble = false
-		} else {
-			inWord = true
-		}
+		currentArg.WriteByte(ch)
+		currentArgQuoteMap = append(currentArgQuoteMap, positionInfo{inDouble: dq2, inSingle: sq2})
 	}
 
-	// Now unescape \ spaces only for arguments that had escaped spaces in double-quoted fragments
-	for i, arg := range args {
-		if meta, ok := argMeta[i]; ok && meta.hasEscSpInDouble && strings.Contains(arg, `\ `) {
-			args[i] = strings.ReplaceAll(arg, `\ `, " ")
+	// Don't forget the last argument
+	if currentArg.Len() > 0 || hadQuotes {
+		arg := currentArg.String()
+		for j := 0; j < len(arg)-1; j++ {
+			if arg[j] == '\\' && arg[j+1] == ' ' && j < len(currentArgQuoteMap) && currentArgQuoteMap[j].inDouble {
+				arg = strings.ReplaceAll(arg, `\ `, " ")
+				break
+			}
 		}
+		args = append(args, arg)
 	}
 
 	return args, nil

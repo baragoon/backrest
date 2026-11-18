@@ -52,6 +52,14 @@ func createTempFileWithCleanup(dir, targetPath string) (*renameio.PendingFile, e
 	// Retry once after cleanup
 	pf, retryErr := renameio.TempFile(dir, targetPath)
 	if retryErr != nil {
+		// Even on retry failure, try to clean up any temp file that may have been created
+		// before the chmod/mode check failed. This is a best-effort cleanup.
+		matches, globErr := filepath.Glob(pattern)
+		if globErr == nil {
+			for _, match := range matches {
+				os.Remove(match) // Best effort; ignore errors
+			}
+		}
 		return nil, retryErr
 	}
 	return pf, nil
