@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.16.0](https://github.com/baragoon/backrest/compare/v1.15.1...v1.16.0) (2026-11-19)
+
+
+### Features
+
+* enhance release workflows with tag validation and improved input handling ([1b19241](https://github.com/baragoon/backrest/commit/1b192417b8fafe2aaf54fda016c363cdd82333a5))
+
+
+### Bug Fixes
+
+* address all remaining PR [#96](https://github.com/baragoon/backrest/issues/96) review comments ([1d1cdd1](https://github.com/baragoon/backrest/commit/1d1cdd14af2b9151a4d45f47bd465fdde9ff5195))
+* address code review issues for shell argument parsing ([81f3f9f](https://github.com/baragoon/backrest/commit/81f3f9fbe02c1515e23ee904bb656e39fd490d5d))
+* address code review issues in dependency migration ([5a9f8f6](https://github.com/baragoon/backrest/commit/5a9f8f667fc631926dd6f2f7c243cbbc3d7788c5))
+* address final PR [#96](https://github.com/baragoon/backrest/issues/96) review comments ([02aed8a](https://github.com/baragoon/backrest/commit/02aed8a55c436ecaa33eaba04c40df095fb9733b))
+* address final PR [#96](https://github.com/baragoon/backrest/issues/96) review comments on dependencies and validation ([d430ecc](https://github.com/baragoon/backrest/commit/d430ecc749c2433a87470439fee9bada0576dacb))
+* address remaining PR [#96](https://github.com/baragoon/backrest/issues/96) review comments ([94c3b79](https://github.com/baragoon/backrest/commit/94c3b793fdfedab40eabad60275e7ba89a528272))
+* address remaining PR [#96](https://github.com/baragoon/backrest/issues/96) review comments ([c621d00](https://github.com/baragoon/backrest/commit/c621d009fdc0e407ede2dcc516c050a28cb21c60))
+* address remaining PR [#96](https://github.com/baragoon/backrest/issues/96) review comments on parsing and type safety ([050e167](https://github.com/baragoon/backrest/commit/050e1677af2dce79f94adee0101511cc32a391de))
+* address temp file cleanup pattern and scope issues ([63a304e](https://github.com/baragoon/backrest/commit/63a304eab9014c6bf92bb93d78db907cef0c2eed))
+* allow protobufjs build script in pnpm configuration ([8ac3e7a](https://github.com/baragoon/backrest/commit/8ac3e7a6abcf5327d6937a63c4d6a69b4327e1da))
+* apply restrictive Windows security descriptor at temp file creation time ([cccfb73](https://github.com/baragoon/backrest/commit/cccfb73c2c3e99297c7a853ac00f388e229201f1))
+* clean up code formatting and improve readability in test files and repo logic ([4167d42](https://github.com/baragoon/backrest/commit/4167d4283297a4d2b7ceea6b4b28a0ae2438f4ac))
+* **deps:** update google.golang.org/genproto/googleapis/api digest to c8830f6 ([c64957b](https://github.com/baragoon/backrest/commit/c64957b23648d372c387414060c93ac00ee9ceec))
+* **deps:** update google.golang.org/genproto/googleapis/api digest to c8830f6 ([4b6a350](https://github.com/baragoon/backrest/commit/4b6a350d6da18a4e7b29d3af21c90f4341646fab))
+* ensure compilation runs even when translation fails ([506f333](https://github.com/baragoon/backrest/commit/506f333e32d7a13404578eda00eb7a8505b28e33))
+* ensure translation compilation runs regardless of exit status ([a7bfacf](https://github.com/baragoon/backrest/commit/a7bfacf202f574ff25fe0ae28dea09d796637257))
+* handle backslash escaping correctly in single-quoted strings ([136a495](https://github.com/baragoon/backrest/commit/136a4959c743fb7667334d034b7b18df280d9e18))
+* preserve backslashes in double-quoted Windows paths ([37f7300](https://github.com/baragoon/backrest/commit/37f73008dca6bd86a3740c155b99b799622fbd32))
+* preserve word-boundary state through escape sequences for comment detection ([7cd5a03](https://github.com/baragoon/backrest/commit/7cd5a03c844fddf245da3b735542c121a7e7abe9))
+* selectively unescape backslash-spaces from double-quoted fragments ([3a1988e](https://github.com/baragoon/backrest/commit/3a1988e19797f09916b12781ea5f54e0b5bce223))
+* use correct windows.EXPLICIT_ACCESS and ACLFromEntries API ([bee5bf4](https://github.com/baragoon/backrest/commit/bee5bf44997330002a20a1afe2b233a8cf71dc44))
+* use platform-specific implementations for atomic file operations ([4a5cea6](https://github.com/baragoon/backrest/commit/4a5cea6d38cd264b4474ae9b08d702f68bd4bd18))
+* use windows.SetEntriesInAcl for supported ACL creation ([a285dbf](https://github.com/baragoon/backrest/commit/a285dbf9beb174e4c0c5c90a4f7c0c63123e2ca2))
+* validate translation items have required string fields ([0741b4e](https://github.com/baragoon/backrest/commit/0741b4e4b0f7e3eb89f21ab1e71dde7de49eb3cc))
+
 ## [1.15.1](https://github.com/baragoon/backrest/compare/v1.15.0...v1.15.1) (2026-11-18)
 
 
