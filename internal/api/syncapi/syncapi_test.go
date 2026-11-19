@@ -750,8 +750,8 @@ func TestSyncListenerRetainsPortAcrossRestarts(t *testing.T) {
 			t.Fatal("sync listener port was not reserved")
 		}
 		addressInUse := errors.Is(err, syscall.EADDRINUSE)
-		// Windows reports an exclusive socket bind conflict as WSAEACCES.
-		if !addressInUse && !(runtime.GOOS == "windows" && errors.Is(err, syscall.EACCES)) {
+		// Windows reports an exclusive socket bind conflict as WSAEACCES (10013).
+		if !addressInUse && !(runtime.GOOS == "windows" && errors.Is(err, syscall.Errno(10013))) {
 			t.Fatalf("failed to probe sync listener port: %v", err)
 		}
 	}
