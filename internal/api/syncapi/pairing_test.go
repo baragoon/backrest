@@ -133,8 +133,8 @@ func TestPairingTokenFlow(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	peerHostAddr := testutil.AllocOpenBindAddr(t)
-	peerClientAddr := testutil.AllocOpenBindAddr(t)
+	peerHostAddr := newSyncListener(t)
+	peerClientAddr := newSyncListener(t)
 
 	pairingSecret, err := cryptoutil.GeneratePairingSecret()
 	if err != nil {
@@ -173,7 +173,7 @@ func TestPairingTokenFlow(t *testing.T) {
 				{
 					Keyid:                identity1.Keyid,
 					InstanceId:           defaultHostID,
-					InstanceUrl:          fmt.Sprintf("http://%s", peerHostAddr),
+					InstanceUrl:          fmt.Sprintf("http://%s", peerHostAddr.Addr()),
 					InitialPairingSecret: pairingSecret,
 				},
 			},
@@ -224,8 +224,8 @@ func TestPairingTokenExpiredRejected(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	peerHostAddr := testutil.AllocOpenBindAddr(t)
-	peerClientAddr := testutil.AllocOpenBindAddr(t)
+	peerHostAddr := newSyncListener(t)
+	peerClientAddr := newSyncListener(t)
 
 	pairingSecret, _ := cryptoutil.GeneratePairingSecret()
 
@@ -259,7 +259,7 @@ func TestPairingTokenExpiredRejected(t *testing.T) {
 				{
 					Keyid:                identity1.Keyid,
 					InstanceId:           defaultHostID,
-					InstanceUrl:          fmt.Sprintf("http://%s", peerHostAddr),
+					InstanceUrl:          fmt.Sprintf("http://%s", peerHostAddr.Addr()),
 					InitialPairingSecret: pairingSecret,
 				},
 			},
@@ -287,7 +287,8 @@ func TestPairingTokenMaxUsesEnforced(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	peerHostAddr := testutil.AllocOpenBindAddr(t)
+	peerHostAddr := newSyncListener(t)
+	peerClient1Addr := newSyncListener(t)
 
 	pairingSecret, _ := cryptoutil.GeneratePairingSecret()
 
@@ -325,7 +326,7 @@ func TestPairingTokenMaxUsesEnforced(t *testing.T) {
 				{
 					Keyid:                identity1.Keyid,
 					InstanceId:           defaultHostID,
-					InstanceUrl:          fmt.Sprintf("http://%s", peerHostAddr),
+					InstanceUrl:          fmt.Sprintf("http://%s", peerHostAddr.Addr()),
 					InitialPairingSecret: pairingSecret,
 				},
 			},
@@ -337,12 +338,15 @@ func TestPairingTokenMaxUsesEnforced(t *testing.T) {
 
 	var wg sync.WaitGroup
 	syncCtx, cancelSync := context.WithCancel(ctx)
+	t.Cleanup(func() {
+		cancelSync()
+		wg.Wait()
+	})
 
 	wg.Add(2)
 	go func() { defer wg.Done(); runSyncAPIWithCtx(syncCtx, peerHost, peerHostAddr) }()
 	go func() {
 		defer wg.Done()
-		peerClient1Addr := testutil.AllocOpenBindAddr(t)
 		runSyncAPIWithCtx(syncCtx, peerClient1, peerClient1Addr)
 	}()
 
@@ -362,7 +366,7 @@ func TestPairingTokenMaxUsesEnforced(t *testing.T) {
 				{
 					Keyid:                identity1.Keyid,
 					InstanceId:           defaultHostID,
-					InstanceUrl:          fmt.Sprintf("http://%s", peerHostAddr),
+					InstanceUrl:          fmt.Sprintf("http://%s", peerHostAddr.Addr()),
 					InitialPairingSecret: pairingSecret,
 				},
 			},
@@ -372,7 +376,7 @@ func TestPairingTokenMaxUsesEnforced(t *testing.T) {
 	peerClient2 := newPeerUnderTest(t, peerClient2Config)
 
 	startRunningSyncAPI(t, peerHost, peerHostAddr)
-	startRunningSyncAPI(t, peerClient2, testutil.AllocOpenBindAddr(t))
+	startRunningSyncAPI(t, peerClient2, newSyncListener(t))
 
 	// Second client should fail — token is consumed.
 	waitForConnectionState(t, ctx, peerClient2, peerClient2Config.Multihost.KnownHosts[0], v1sync.ConnectionState_CONNECTION_STATE_ERROR_AUTH)
@@ -383,8 +387,8 @@ func TestNoPairingSecretRejected(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	peerHostAddr := testutil.AllocOpenBindAddr(t)
-	peerClientAddr := testutil.AllocOpenBindAddr(t)
+	peerHostAddr := newSyncListener(t)
+	peerClientAddr := newSyncListener(t)
 
 	// Host has NO pairing tokens and NO authorized clients.
 	peerHostConfig := &v1.Config{
@@ -408,7 +412,7 @@ func TestNoPairingSecretRejected(t *testing.T) {
 				{
 					Keyid:       identity1.Keyid,
 					InstanceId:  defaultHostID,
-					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr),
+					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr.Addr()),
 				},
 			},
 		},

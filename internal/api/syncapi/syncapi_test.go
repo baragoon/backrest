@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -77,8 +80,8 @@ func TestConnectionSucceeds(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	peerHostAddr := testutil.AllocOpenBindAddr(t)
-	peerClientAddr := testutil.AllocOpenBindAddr(t)
+	peerHostAddr := newSyncListener(t)
+	peerClientAddr := newSyncListener(t)
 
 	peerHostConfig := &v1.Config{
 		Version:  migrations.CurrentVersion,
@@ -105,7 +108,7 @@ func TestConnectionSucceeds(t *testing.T) {
 				{
 					Keyid:       identity1.Keyid,
 					InstanceId:  defaultHostID,
-					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr),
+					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr.Addr()),
 				},
 			},
 		},
@@ -125,8 +128,8 @@ func TestConnectionBadKeyRejected(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	peerHostAddr := testutil.AllocOpenBindAddr(t)
-	peerClientAddr := testutil.AllocOpenBindAddr(t)
+	peerHostAddr := newSyncListener(t)
+	peerClientAddr := newSyncListener(t)
 
 	// Host has identity1, and authorizes no one.
 	peerHostConfig := &v1.Config{
@@ -150,7 +153,7 @@ func TestConnectionBadKeyRejected(t *testing.T) {
 				{
 					Keyid:       identity1.Keyid,
 					InstanceId:  defaultHostID,
-					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr),
+					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr.Addr()),
 				},
 			},
 		},
@@ -170,8 +173,8 @@ func TestSyncConfigChange(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	peerHostAddr := testutil.AllocOpenBindAddr(t)
-	peerClientAddr := testutil.AllocOpenBindAddr(t)
+	peerHostAddr := newSyncListener(t)
+	peerClientAddr := newSyncListener(t)
 
 	peerHostConfig := &v1.Config{
 		Version:  migrations.CurrentVersion,
@@ -224,7 +227,7 @@ func TestSyncConfigChange(t *testing.T) {
 				{
 					Keyid:       identity1.Keyid,
 					InstanceId:  defaultHostID,
-					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr),
+					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr.Addr()),
 				},
 			},
 		},
@@ -276,8 +279,8 @@ func TestSimpleOperationSync(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	peerHostAddr := testutil.AllocOpenBindAddr(t)
-	peerClientAddr := testutil.AllocOpenBindAddr(t)
+	peerHostAddr := newSyncListener(t)
+	peerClientAddr := newSyncListener(t)
 
 	peerHostConfig := &v1.Config{
 		Version:  migrations.CurrentVersion,
@@ -316,7 +319,7 @@ func TestSimpleOperationSync(t *testing.T) {
 				{
 					Keyid:       identity1.Keyid,
 					InstanceId:  defaultHostID,
-					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr),
+					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr.Addr()),
 					Permissions: []*v1.Multihost_Permission{
 						{
 							Type: v1.Multihost_Permission_PERMISSION_READ_OPERATIONS,
@@ -402,8 +405,8 @@ func TestSyncMutations(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	peerHostAddr := testutil.AllocOpenBindAddr(t)
-	peerClientAddr := testutil.AllocOpenBindAddr(t)
+	peerHostAddr := newSyncListener(t)
+	peerClientAddr := newSyncListener(t)
 
 	peerHostConfig := &v1.Config{
 		Version:  migrations.CurrentVersion,
@@ -442,7 +445,7 @@ func TestSyncMutations(t *testing.T) {
 				{
 					Keyid:       identity1.Keyid,
 					InstanceId:  defaultHostID,
-					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr),
+					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr.Addr()),
 					Permissions: []*v1.Multihost_Permission{
 						{
 							Type: v1.Multihost_Permission_PERMISSION_READ_OPERATIONS,
@@ -472,6 +475,10 @@ func TestSyncMutations(t *testing.T) {
 	syncCtx, cancelSyncCtx := context.WithCancel(ctx)
 
 	var wg sync.WaitGroup
+	t.Cleanup(func() {
+		cancelSyncCtx()
+		wg.Wait()
+	})
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
@@ -686,26 +693,120 @@ func tryConnect(t *testing.T, ctx context.Context, peer *peerUnderTest, hostPeer
 	waitForConnectionState(t, ctx, peer, hostPeer, v1sync.ConnectionState_CONNECTION_STATE_CONNECTED)
 }
 
-func runSyncAPIWithCtx(ctx context.Context, peer *peerUnderTest, bindAddr string) {
+func newSyncListener(t *testing.T) *net.TCPListener {
+	t.Helper()
+	listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	t.Cleanup(func() { listener.Close() })
+	return listener
+}
+
+// Keep the underlying port reserved when an HTTP server shuts down, so that
+// reconnect tests can restart the server on the same address.
+type syncListener struct {
+	*net.TCPListener
+	closed chan struct{}
+	once   sync.Once
+}
+
+func (l *syncListener) Accept() (net.Conn, error) {
+	conn, err := l.TCPListener.Accept()
+	select {
+	case <-l.closed:
+		if conn != nil {
+			conn.Close()
+		}
+		return nil, net.ErrClosed
+	default:
+		return conn, err
+	}
+}
+
+func (l *syncListener) Close() error {
+	var err error
+	l.once.Do(func() {
+		close(l.closed)
+		err = l.SetDeadline(time.Now())
+	})
+	return err
+}
+
+func serveSyncListener(listener *net.TCPListener) *syncListener {
+	if err := listener.SetDeadline(time.Time{}); err != nil {
+		panic(err)
+	}
+	return &syncListener{TCPListener: listener, closed: make(chan struct{})}
+}
+
+func TestSyncListenerRetainsPortAcrossRestarts(t *testing.T) {
+	listener := newSyncListener(t)
+	assertReserved := func() {
+		t.Helper()
+		other, err := net.Listen("tcp", listener.Addr().String())
+		if err == nil {
+			other.Close()
+			t.Fatal("sync listener port was not reserved")
+		}
+		addressInUse := errors.Is(err, syscall.EADDRINUSE)
+		// Windows reports an occupied socket address as WSAEADDRINUSE (10048).
+		if !addressInUse && !(runtime.GOOS == "windows" && errors.Is(err, syscall.Errno(10048))) {
+			t.Fatalf("failed to probe sync listener port: %v", err)
+		}
+	}
+
+	assertReserved()
+	for range 2 {
+		server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		})}
+		done := make(chan error, 1)
+		serverListener := serveSyncListener(listener)
+		go func() { done <- server.Serve(serverListener) }()
+		resp, err := http.Get("http://" + listener.Addr().String())
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		resp.Body.Close()
+		assertReserved()
+		if err := server.Shutdown(context.Background()); err != nil {
+			t.Fatalf("shutdown failed: %v", err)
+		}
+		if err := <-done; err != http.ErrServerClosed {
+			t.Fatalf("serve returned %v", err)
+		}
+		assertReserved()
+	}
+}
+
+func runSyncAPIWithCtx(ctx context.Context, peer *peerUnderTest, listener *net.TCPListener) {
 	mux := http.NewServeMux()
 	syncHandler := NewBackrestSyncHandler(peer.manager)
 	mux.Handle(v1syncconnect.NewBackrestSyncServiceHandler(syncHandler))
 
 	server := &http.Server{
-		Addr:    bindAddr,
 		Handler: h2c.NewHandler(mux, &http2.Server{}), // h2c is HTTP/2 without TLS for grpc-connect support.
 	}
 
 	var wg sync.WaitGroup
 
+	serverListener := serveSyncListener(listener)
+
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		<-ctx.Done()
-		server.Shutdown(context.Background())
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			server.Close()
+		}
 	}()
 
 	wg.Add(1)
 	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.Serve(serverListener); err != nil && err != http.ErrServerClosed {
 			panic(err)
 		}
 		wg.Done()
@@ -720,11 +821,18 @@ func runSyncAPIWithCtx(ctx context.Context, peer *peerUnderTest, bindAddr string
 	wg.Wait()
 }
 
-func startRunningSyncAPI(t *testing.T, peer *peerUnderTest, bindAddr string) {
+func startRunningSyncAPI(t *testing.T, peer *peerUnderTest, listener *net.TCPListener) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	go runSyncAPIWithCtx(ctx, peer, bindAddr)
+	done := make(chan struct{})
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+	go func() {
+		defer close(done)
+		runSyncAPIWithCtx(ctx, peer, listener)
+	}()
 }
 
 type peerUnderTest struct {

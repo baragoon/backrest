@@ -36,8 +36,8 @@ func TestFuzzOperationSync(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	peerHostAddr := testutil.AllocOpenBindAddr(t)
-	peerClientAddr := testutil.AllocOpenBindAddr(t)
+	peerHostAddr := newSyncListener(t)
+	peerClientAddr := newSyncListener(t)
 
 	repoGUID := cryptoutil.MustRandomID(cryptoutil.DefaultIDBits)
 
@@ -67,7 +67,7 @@ func TestFuzzOperationSync(t *testing.T) {
 				{
 					Keyid:       identity1.Keyid,
 					InstanceId:  defaultHostID,
-					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr),
+					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr.Addr()),
 					Permissions: []*v1.Multihost_Permission{
 						{
 							Type:   v1.Multihost_Permission_PERMISSION_READ_OPERATIONS,
@@ -102,6 +102,10 @@ func TestFuzzOperationSync(t *testing.T) {
 	// Start sync infrastructure.
 	syncCtx, cancelSync := context.WithCancel(ctx)
 	var syncWg sync.WaitGroup
+	t.Cleanup(func() {
+		cancelSync()
+		syncWg.Wait()
+	})
 	startSync := func() {
 		syncCtx, cancelSync = context.WithCancel(ctx)
 		syncWg.Add(2)
@@ -196,8 +200,8 @@ func TestFuzzOperationSyncOfflineMutations(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	peerHostAddr := testutil.AllocOpenBindAddr(t)
-	peerClientAddr := testutil.AllocOpenBindAddr(t)
+	peerHostAddr := newSyncListener(t)
+	peerClientAddr := newSyncListener(t)
 
 	repoGUID := cryptoutil.MustRandomID(cryptoutil.DefaultIDBits)
 
@@ -220,7 +224,7 @@ func TestFuzzOperationSyncOfflineMutations(t *testing.T) {
 			KnownHosts: []*v1.Multihost_Peer{{
 				Keyid:       identity1.Keyid,
 				InstanceId:  defaultHostID,
-				InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr),
+				InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr.Addr()),
 				Permissions: []*v1.Multihost_Permission{{
 					Type:   v1.Multihost_Permission_PERMISSION_READ_OPERATIONS,
 					Scopes: []string{"repo:" + defaultRepoID},
@@ -250,6 +254,10 @@ func TestFuzzOperationSyncOfflineMutations(t *testing.T) {
 	// Phase 1: add initial operations while connected
 	syncCtx, cancelSync := context.WithCancel(ctx)
 	var syncWg sync.WaitGroup
+	t.Cleanup(func() {
+		cancelSync()
+		syncWg.Wait()
+	})
 	syncWg.Add(2)
 	go func() { defer syncWg.Done(); runSyncAPIWithCtx(syncCtx, peerHost, peerHostAddr) }()
 	go func() { defer syncWg.Done(); runSyncAPIWithCtx(syncCtx, peerClient, peerClientAddr) }()

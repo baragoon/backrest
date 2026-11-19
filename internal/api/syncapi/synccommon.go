@@ -94,7 +94,18 @@ func runSync(
 		return err
 	}
 
-	for item := range commandStream.ReadChannel() {
+	for {
+		var item *v1sync.SyncStreamItem
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case received, ok := <-commandStream.ReadChannel():
+			if !ok {
+				return nil
+			}
+			item = received
+		}
+
 		switch item.GetAction().(type) {
 		case *v1sync.SyncStreamItem_Heartbeat:
 			if err := handler.HandleHeartbeat(ctx, commandStream, item.GetHeartbeat()); err != nil {
@@ -144,7 +155,6 @@ func runSync(
 			return NewSyncErrorProtocol(fmt.Errorf("unknown action type %T in sync stream item", item.GetAction()))
 		}
 	}
-	return nil
 }
 
 // createHandshakePacket builds the post-encryption identity handshake. The
