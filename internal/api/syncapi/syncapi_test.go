@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -473,6 +474,10 @@ func TestSyncMutations(t *testing.T) {
 	syncCtx, cancelSyncCtx := context.WithCancel(ctx)
 
 	var wg sync.WaitGroup
+	t.Cleanup(func() {
+		cancelSyncCtx()
+		wg.Wait()
+	})
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
@@ -743,6 +748,9 @@ func TestSyncListenerRetainsPortAcrossRestarts(t *testing.T) {
 			other.Close()
 			t.Fatal("sync listener port was not reserved")
 		}
+		if !errors.Is(err, syscall.EADDRINUSE) {
+			t.Fatalf("failed to probe sync listener port: %v", err)
+		}
 	}
 
 	assertReserved()
@@ -786,7 +794,11 @@ func runSyncAPIWithCtx(ctx context.Context, peer *peerUnderTest, listener *net.T
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
-		server.Shutdown(context.Background())
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			server.Close()
+		}
 	}()
 
 	wg.Add(1)

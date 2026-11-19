@@ -102,6 +102,10 @@ func TestFuzzOperationSync(t *testing.T) {
 	// Start sync infrastructure.
 	syncCtx, cancelSync := context.WithCancel(ctx)
 	var syncWg sync.WaitGroup
+	t.Cleanup(func() {
+		cancelSync()
+		syncWg.Wait()
+	})
 	startSync := func() {
 		syncCtx, cancelSync = context.WithCancel(ctx)
 		syncWg.Add(2)
@@ -250,6 +254,10 @@ func TestFuzzOperationSyncOfflineMutations(t *testing.T) {
 	// Phase 1: add initial operations while connected
 	syncCtx, cancelSync := context.WithCancel(ctx)
 	var syncWg sync.WaitGroup
+	t.Cleanup(func() {
+		cancelSync()
+		syncWg.Wait()
+	})
 	syncWg.Add(2)
 	go func() { defer syncWg.Done(); runSyncAPIWithCtx(syncCtx, peerHost, peerHostAddr) }()
 	go func() { defer syncWg.Done(); runSyncAPIWithCtx(syncCtx, peerClient, peerClientAddr) }()

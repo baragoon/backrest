@@ -102,10 +102,16 @@ func (m *SyncManager) GetSyncClients() map[string]*SyncClient {
 	return maps.Clone(m.syncClients)
 }
 
-// Note: top level function will be called holding the lock, must kick off goroutines and then return.
 func (m *SyncManager) RunSync(ctx context.Context) {
 	var syncWg sync.WaitGroup
 	var cancelLastSync context.CancelFunc
+
+	defer func() {
+		if cancelLastSync != nil {
+			cancelLastSync()
+		}
+		syncWg.Wait()
+	}()
 
 	configWatchCh := m.configMgr.OnChange.Subscribe()
 	defer m.configMgr.OnChange.Unsubscribe(configWatchCh)
@@ -114,9 +120,6 @@ func (m *SyncManager) RunSync(ctx context.Context) {
 	}()
 
 	startSync := func(config *v1.Config) {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-
 		if cancelLastSync != nil {
 			cancelLastSync()
 			zap.L().Info("syncmanager applying new config, waiting for existing sync goroutines to exit")
@@ -129,7 +132,9 @@ func (m *SyncManager) RunSync(ctx context.Context) {
 
 		if config.Multihost.GetIdentity() == nil {
 			zap.S().Info("syncmanager no identity key configured, sync feature is disabled.")
+			m.mu.Lock()
 			m.snapshot = nil // Clear the snapshot to indicate sync is disabled
+			m.mu.Unlock()
 			return
 		}
 
@@ -140,10 +145,13 @@ func (m *SyncManager) RunSync(ctx context.Context) {
 			return
 		}
 
-		m.snapshot = &syncConfigSnapshot{
+		snapshot := &syncConfigSnapshot{
 			config:      config,
 			identityKey: identityKey,
 		}
+		m.mu.Lock()
+		m.snapshot = snapshot
+		m.mu.Unlock()
 
 		// Past this point, determine if sync clients are configured and start threads for any.
 		if len(config.Multihost.GetKnownHosts()) == 0 {
@@ -162,7 +170,7 @@ func (m *SyncManager) RunSync(ctx context.Context) {
 			go func(knownHostPeer *v1.Multihost_Peer) {
 				defer syncWg.Done()
 				zap.S().Debugf("syncmanager starting sync goroutine with peer %q", knownHostPeer.InstanceId)
-				err := m.runSyncWithPeerInternal(syncCtx, config, knownHostPeer)
+				err := m.runSyncWithPeerInternal(syncCtx, config, snapshot, knownHostPeer)
 				if err != nil {
 					zap.S().Errorf("syncmanager error starting client for peer %q: %v", knownHostPeer.InstanceId, err)
 				}
@@ -236,16 +244,16 @@ func (m *SyncManager) RunSync(ctx context.Context) {
 	}
 }
 
-// runSyncWithPeerInternal starts the sync process with a single peer. It is expected to spawn a goroutine that will
-// return when the context is canceled. Errors can only be returned upfront.
-func (m *SyncManager) runSyncWithPeerInternal(ctx context.Context, config *v1.Config, knownHostPeer *v1.Multihost_Peer) error {
+// runSyncWithPeerInternal runs the sync process with a single peer until the context is canceled.
+// Errors can only be returned upfront.
+func (m *SyncManager) runSyncWithPeerInternal(ctx context.Context, config *v1.Config, snapshot *syncConfigSnapshot, knownHostPeer *v1.Multihost_Peer) error {
 	if config.Instance == "" {
 		return errors.New("local instance must set instance name before peersync can be enabled")
 	} else if config.Multihost == nil {
 		return errors.New("multihost config must be set before peersync can be enabled")
 	}
 
-	newClient, err := NewSyncClient(m, *m.snapshot, knownHostPeer, m.oplog)
+	newClient, err := NewSyncClient(m, *snapshot, knownHostPeer, m.oplog)
 	if err != nil {
 		return fmt.Errorf("creating sync client: %w", err)
 	}
@@ -253,17 +261,15 @@ func (m *SyncManager) runSyncWithPeerInternal(ctx context.Context, config *v1.Co
 	m.syncClients[knownHostPeer.Keyid] = newClient
 	m.mu.Unlock()
 
-	go func() {
-		newClient.RunSync(ctx)
-		m.mu.Lock()
-		// Only remove the entry if it still points at us. On reconfiguration the new
-		// client may have already inserted itself under the same key; deleting blindly
-		// would wipe the replacement.
-		if m.syncClients[knownHostPeer.Keyid] == newClient {
-			delete(m.syncClients, knownHostPeer.Keyid)
-		}
-		m.mu.Unlock()
-	}()
+	newClient.RunSync(ctx)
+	m.mu.Lock()
+	// Only remove the entry if it still points at us. On reconfiguration the new
+	// client may have already inserted itself under the same key; deleting blindly
+	// would wipe the replacement.
+	if m.syncClients[knownHostPeer.Keyid] == newClient {
+		delete(m.syncClients, knownHostPeer.Keyid)
+	}
+	m.mu.Unlock()
 
 	return nil
 }

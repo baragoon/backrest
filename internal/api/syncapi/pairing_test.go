@@ -338,6 +338,10 @@ func TestPairingTokenMaxUsesEnforced(t *testing.T) {
 
 	var wg sync.WaitGroup
 	syncCtx, cancelSync := context.WithCancel(ctx)
+	t.Cleanup(func() {
+		cancelSync()
+		wg.Wait()
+	})
 
 	wg.Add(2)
 	go func() { defer wg.Done(); runSyncAPIWithCtx(syncCtx, peerHost, peerHostAddr) }()
