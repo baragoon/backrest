@@ -36,8 +36,8 @@ func TestFuzzOperationSync(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	peerHostAddr := testutil.AllocOpenBindAddr(t)
-	peerClientAddr := testutil.AllocOpenBindAddr(t)
+	peerHostAddr := newSyncListener(t)
+	peerClientAddr := newSyncListener(t)
 
 	repoGUID := cryptoutil.MustRandomID(cryptoutil.DefaultIDBits)
 
@@ -67,7 +67,7 @@ func TestFuzzOperationSync(t *testing.T) {
 				{
 					Keyid:       identity1.Keyid,
 					InstanceId:  defaultHostID,
-					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr),
+					InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr.Addr()),
 					Permissions: []*v1.Multihost_Permission{
 						{
 							Type:   v1.Multihost_Permission_PERMISSION_READ_OPERATIONS,
@@ -196,8 +196,8 @@ func TestFuzzOperationSyncOfflineMutations(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	peerHostAddr := testutil.AllocOpenBindAddr(t)
-	peerClientAddr := testutil.AllocOpenBindAddr(t)
+	peerHostAddr := newSyncListener(t)
+	peerClientAddr := newSyncListener(t)
 
 	repoGUID := cryptoutil.MustRandomID(cryptoutil.DefaultIDBits)
 
@@ -220,7 +220,7 @@ func TestFuzzOperationSyncOfflineMutations(t *testing.T) {
 			KnownHosts: []*v1.Multihost_Peer{{
 				Keyid:       identity1.Keyid,
 				InstanceId:  defaultHostID,
-				InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr),
+				InstanceUrl: fmt.Sprintf("http://%s", peerHostAddr.Addr()),
 				Permissions: []*v1.Multihost_Permission{{
 					Type:   v1.Multihost_Permission_PERMISSION_READ_OPERATIONS,
 					Scopes: []string{"repo:" + defaultRepoID},
