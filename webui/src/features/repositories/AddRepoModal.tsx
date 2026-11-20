@@ -174,14 +174,18 @@ const parseSftpUri = (
 // isHostKeyError detects ssh host-key verification failures in an error
 // message. restic's sftp backend forwards ssh's stderr into the error it
 // returns; ssh prints these markers when the server's host key is unknown or
-// does not match the pinned known_hosts entry. Kept in sync with the Go-side
-// markers in internal/api/backresthandler.go.
+// does not match the pinned known_hosts entry. The SFTP EOF fallback handles
+// restic exiting before it copies ssh's diagnostic under load. Kept in sync
+// with the Go-side markers in internal/api/backresthandler.go.
 const isHostKeyError = (message: string | undefined): boolean => {
   if (!message) return false;
   const lower = message.toLowerCase();
   return (
     lower.includes("host key verification failed") ||
-    lower.includes("remote host identification has changed")
+    lower.includes("remote host identification has changed") ||
+    lower.includes(
+      "error receiving version packet from server: server unexpectedly closed connection: unexpected eof",
+    )
   );
 };
 

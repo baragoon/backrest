@@ -162,12 +162,13 @@ func (s *BackrestHandler) CheckRepoExists(ctx context.Context, req *connect.Requ
 }
 
 // hostKeyVerificationMarkers are substrings (matched case-insensitively) that
-// OpenSSH emits to stderr when it refuses to connect because the server's host
-// key is unknown or does not match the pinned known_hosts entry. restic's sftp
-// backend forwards ssh's stderr into the error it returns.
+// indicate an SSH host-key verification failure. Restic normally forwards ssh's
+// diagnostic, but its sftp backend can exit before the diagnostic is copied
+// under load, leaving only the version-packet EOF error.
 var hostKeyVerificationMarkers = []string{
 	"host key verification failed",
 	"remote host identification has changed",
+	"error receiving version packet from server: server unexpectedly closed connection: unexpected eof",
 }
 
 // isHostKeyVerificationError reports whether err (anywhere in its chain of

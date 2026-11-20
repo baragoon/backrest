@@ -1574,6 +1574,45 @@ func TestSanitizeRepoFlags(t *testing.T) {
 	}
 }
 
+func TestIsHostKeyVerificationError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "host key verification failed",
+			err:  errors.New("subprocess ssh: Host key verification failed."),
+			want: true,
+		},
+		{
+			name: "host key changed",
+			err:  errors.New("REMOTE HOST IDENTIFICATION HAS CHANGED"),
+			want: true,
+		},
+		{
+			name: "restic drops ssh diagnostic",
+			err:  errors.New("unable to start the sftp session, error: error receiving version packet from server: server unexpectedly closed connection: unexpected EOF"),
+			want: true,
+		},
+		{
+			name: "unrelated EOF",
+			err:  errors.New("server unexpectedly closed connection: unexpected EOF"),
+		},
+		{
+			name: "nil error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isHostKeyVerificationError(tt.err); got != tt.want {
+				t.Errorf("isHostKeyVerificationError(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestGetSummaryDashboardOverdue verifies that day buckets are flagged overdue once the
 // gap since the last good backup exceeds the plan schedule's nominal period plus grace.
 func TestGetSummaryDashboardOverdue(t *testing.T) {

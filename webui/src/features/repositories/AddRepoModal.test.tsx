@@ -261,4 +261,32 @@ describe("AddRepoModal", () => {
       screen.getByRole("button", { name: m.add_plan_modal_button_submit() }),
     ).not.toBeDisabled();
   });
+
+  it("shows the host-key confirmation when restic drops ssh's diagnostic", async () => {
+    const errorSpy = vi.spyOn(alerts, "error");
+    vi.mocked(backrestService.addRepo).mockRejectedValue(
+      new Error(
+        "unable to start the sftp session, error: error receiving version packet from server: server unexpectedly closed connection: unexpected EOF",
+      ),
+    );
+
+    const { user } = renderWithProviders(<AddRepoModal template={null} />, {
+      config: makeConfig(),
+    });
+
+    await fillCreateForm(user, {
+      id: "myrepo",
+      uri: "sftp:user@127.0.0.1:/tmp/repo",
+      password: "supersecret",
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: m.add_plan_modal_button_submit() }),
+    );
+
+    expect(
+      await screen.findByText(m.add_repo_modal_unknown_sftp_host_key()),
+    ).toBeInTheDocument();
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
 });
