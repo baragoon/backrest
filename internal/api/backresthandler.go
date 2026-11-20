@@ -172,6 +172,7 @@ var hostKeyVerificationMarkers = []string{
 }
 
 const sftpStartupEOF = "error receiving version packet from server: server unexpectedly closed connection: unexpected eof"
+const sftpSSHProbeTimeout = 30 * time.Second
 
 // isHostKeyVerificationError reports whether err (anywhere in its chain of
 // wrapped messages) looks like an ssh host-key verification failure.
@@ -192,8 +193,11 @@ func isHostKeyVerificationError(err error) bool {
 // only its generic SFTP startup EOF. The SSH probe distinguishes a host-key
 // failure from other causes of the same Restic error, such as a refused port.
 func isSftpHostKeyVerificationError(ctx context.Context, repoConfig *v1.Repo, err error) bool {
+	if repoConfig == nil {
+		return false
+	}
 	uri := repo.ExpandEnv(repoConfig.GetUri())
-	if repoConfig == nil || !strings.HasPrefix(strings.ToLower(uri), "sftp:") {
+	if !strings.HasPrefix(strings.ToLower(uri), "sftp:") {
 		return false
 	}
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), sftpStartupEOF) {
@@ -245,16 +249,23 @@ func isSftpHostKeyVerificationError(ctx context.Context, repoConfig *v1.Repo, er
 	if uriPort != "" && !hasSftpPortArg(sshArgs) {
 		sshArgs = append(sshArgs, "-p", uriPort)
 	}
-	sshArgs = append([]string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=5"}, sshArgs...)
+	sshArgs = append([]string{"-o", "BatchMode=yes"}, sshArgs...)
 	if user != "" {
 		sshArgs = append(sshArgs, "-l", user)
 	}
 	sshArgs = append(sshArgs, host, "-s", "sftp")
 
-	probeCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	probeCtx, cancel := context.WithTimeout(ctx, sftpSSHProbeTimeout)
 	defer cancel()
 	output, _ := exec.CommandContext(probeCtx, "ssh", sshArgs...).CombinedOutput()
 	return isHostKeyVerificationError(errors.New(string(output)))
+}
+
+func repoInitError(ctx context.Context, repoConfig *v1.Repo, err error) error {
+	if isHostKeyVerificationError(err) || isSftpHostKeyVerificationError(ctx, repoConfig, err) {
+		return fmt.Errorf("host key verification failed while initializing repo: %w", err)
+	}
+	return fmt.Errorf("failed to init repo: %w", err)
 }
 
 func hasSftpPortArg(args []string) bool {
@@ -346,7 +357,7 @@ func (s *BackrestHandler) AddRepo(ctx context.Context, req *connect.Request[v1.A
 	}
 
 	if err := r.Init(ctx); err != nil {
-		return nil, fmt.Errorf("failed to init repo: %w", err)
+		return nil, repoInitError(ctx, newRepo, err)
 	}
 
 	guid, err := r.RepoGUID()

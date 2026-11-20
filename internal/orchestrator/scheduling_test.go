@@ -218,15 +218,6 @@ func TestSchedulerWait(t *testing.T) {
 	orch := newTestOrchestrator(t)
 	orch.taskQueue.Reset()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	started := make(chan struct{})
-	go func() {
-		close(started)
-		orch.Run(ctx)
-	}()
-	<-started
-
 	ran := make(chan struct{})
 	didRun := false
 	orch.ScheduleTask(newTestTask(
@@ -243,6 +234,22 @@ func TestSchedulerWait(t *testing.T) {
 			return &t
 		},
 	), tasks.TaskPriorityDefault)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go orch.Run(ctx)
+
+	waitTimer := time.NewTimer(time.Second)
+	defer waitTimer.Stop()
+	waitTicker := time.NewTicker(time.Millisecond)
+	defer waitTicker.Stop()
+	for !orch.taskQueue.HasDequeueWaiter() {
+		select {
+		case <-waitTimer.C:
+			t.Fatal("orchestrator did not register to wait for queued tasks")
+		case <-waitTicker.C:
+		}
+	}
 
 	// Assert
 	select {

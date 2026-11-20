@@ -74,6 +74,12 @@ func (t *TimePriorityQueue[T]) Enqueue(at time.Time, priority int, v T) {
 	t.tqueue.Enqueue(at, priorityEntry[T]{at, priority, v})
 }
 
+// HasDequeueWaiter reports whether a dequeue has registered to be woken by
+// newly enqueued items.
+func (t *TimePriorityQueue[T]) HasDequeueWaiter() bool {
+	return t.tqueue.notify.Load() != nil
+}
+
 func (t *TimePriorityQueue[T]) Dequeue(ctx context.Context) T {
 	t.tqueue.mu.Lock()
 	for {

@@ -1662,6 +1662,9 @@ func TestIsSftpHostKeyVerificationError(t *testing.T) {
 	if !isSftpHostKeyVerificationError(context.Background(), repo, startupErr) {
 		t.Fatal("expected host-key probe diagnostic to be recognized")
 	}
+	if err := repoInitError(context.Background(), repo, startupErr); !isHostKeyVerificationError(err) {
+		t.Fatalf("repo init error should expose a host-key diagnostic to the UI: %v", err)
+	}
 
 	t.Setenv("SSH_PROBE_OUTPUT", "ssh: connect to host 127.0.0.1 port 2222: Connection refused")
 	if isSftpHostKeyVerificationError(context.Background(), repo, startupErr) {
@@ -1714,7 +1717,7 @@ func TestSftpSSHProbeArguments(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := "-o\nBatchMode=yes\n-o\nConnectTimeout=5\n-p\n2222\n-l\nuser\nresolved-host\n-s\nsftp\n"
+			want := "-o\nBatchMode=yes\n-p\n2222\n-l\nuser\nresolved-host\n-s\nsftp\n"
 			if string(got) != want {
 				t.Fatalf("SSH argv = %q; want %q", got, want)
 			}
