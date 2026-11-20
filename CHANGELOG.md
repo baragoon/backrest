@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.16.1](https://github.com/baragoon/backrest/compare/v1.16.0...v1.16.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* Recognize SFTP host-key failures when Restic drops SSH diagnostics ([3ba6a20](https://github.com/baragoon/backrest/commit/3ba6a205780a1f34f212d498cf38dfb813e5e95e))
+* retain managed restic if upgrade fails ([b39f8e4](https://github.com/baragoon/backrest/commit/b39f8e454d79aeea3f0a747948a39344da652061))
+
 ## [1.16.0](https://github.com/baragoon/backrest/compare/v1.15.1...v1.16.0) (2026-11-19)
 
 
