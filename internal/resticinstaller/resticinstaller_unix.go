@@ -49,12 +49,12 @@ func installRestic(targetPath string) error {
 		return fmt.Errorf("verifying: %w", err)
 	}
 
-	if err := os.Rename(targetPath+".tmp", targetPath); err != nil {
-		return fmt.Errorf("renaming %v: %w", targetPath, err)
+	if err := os.Chmod(targetPath+".tmp", 0755); err != nil {
+		return fmt.Errorf("chmod executable %v: %w", targetPath, err)
 	}
 
-	if err := os.Chmod(targetPath, 0755); err != nil {
-		return fmt.Errorf("chmod executable %v: %w", targetPath, err)
+	if err := os.Rename(targetPath+".tmp", targetPath); err != nil {
+		return fmt.Errorf("renaming %v: %w", targetPath, err)
 	}
 
 	return nil
@@ -79,6 +79,10 @@ func findOrDownloadRestic(installPath string) error {
 
 	zap.S().Infof("installing restic to %v", installPath)
 	if err := installRestic(installPath); err != nil {
+		if version, versionErr := getResticVersion(installPath); versionErr == nil {
+			zap.S().Warnf("install restic %v failed: %v; using existing restic %v at %q, which may not be supported by backrest", RequiredResticVersion, err, version, installPath)
+			return nil
+		}
 		return fmt.Errorf("install restic: %w", err)
 	}
 
@@ -123,6 +127,6 @@ func findHelper() (string, error) {
 		return "", fmt.Errorf("find or download restic: %w", err)
 	}
 
-	zap.S().Infof("restic binary %q in data dir matches required version %v, it will be used for backrest commands", resticInstallPath, RequiredResticVersion)
+	zap.S().Infof("restic binary %q in data dir will be used for backrest commands", resticInstallPath)
 	return resticInstallPath, nil
 }
