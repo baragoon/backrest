@@ -191,35 +191,55 @@ func isHostKeyVerificationError(err error) bool {
 // isSftpHostKeyVerificationError retries the SSH handshake when Restic reports
 // only its generic SFTP startup EOF. The SSH probe distinguishes a host-key
 // failure from other causes of the same Restic error, such as a refused port.
-func isSftpHostKeyVerificationError(ctx context.Context, repo *v1.Repo, err error) bool {
-	if repo == nil || !strings.HasPrefix(strings.ToLower(repo.GetUri()), "sftp:") {
+func isSftpHostKeyVerificationError(ctx context.Context, repoConfig *v1.Repo, err error) bool {
+	uri := repo.ExpandEnv(repoConfig.GetUri())
+	if repoConfig == nil || !strings.HasPrefix(strings.ToLower(uri), "sftp:") {
 		return false
 	}
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), sftpStartupEOF) {
 		return false
 	}
 
-	host, user, uriPort, ok := sftpSSHProbeTarget(repo.GetUri())
+	host, user, uriPort, ok := sftpSSHProbeTarget(uri)
 	if !ok {
 		return false
 	}
 
-	var sshArgs []string
-	for _, flag := range repo.GetFlags() {
-		if strings.HasPrefix(flag, "--option=sftp.command=") {
-			return false
-		}
-		if !strings.HasPrefix(flag, "--option=sftp.args=") {
-			continue
-		}
-		value := strings.TrimPrefix(flag, "--option=sftp.args=")
-		value = strings.Trim(value, "'")
-		args, err := shellquote.Split(value)
+	var flags []string
+	for _, flag := range repoConfig.GetFlags() {
+		args, err := repo.ParseFlagArgs(repo.ExpandEnv(flag))
 		if err != nil {
 			return false
 		}
-		sshArgs = args
-		break
+		flags = append(flags, args...)
+	}
+	var sshArgs []string
+	for i := 0; i < len(flags); i++ {
+		var option string
+		switch {
+		case flags[i] == "--option" || flags[i] == "-o":
+			i++
+			if i == len(flags) {
+				return false
+			}
+			option = flags[i]
+		case strings.HasPrefix(flags[i], "--option="):
+			option = strings.TrimPrefix(flags[i], "--option=")
+		case strings.HasPrefix(flags[i], "-o"):
+			option = strings.TrimPrefix(strings.TrimPrefix(flags[i], "-o"), "=")
+		default:
+			continue
+		}
+		if strings.HasPrefix(option, "sftp.command=") {
+			return false
+		}
+		if strings.HasPrefix(option, "sftp.args=") {
+			args, err := shellquote.Split(strings.TrimPrefix(option, "sftp.args="))
+			if err != nil {
+				return false
+			}
+			sshArgs = args
+		}
 	}
 
 	if uriPort != "" && !hasSftpPortArg(sshArgs) {
@@ -270,7 +290,26 @@ func sftpSSHProbeTarget(uri string) (host, user, port string, ok bool) {
 		return "", "", "", false
 	}
 	authority := strings.TrimPrefix(uri, "sftp:")
-	if at := strings.LastIndex(authority, "@"); at >= 0 {
+	// Locate the path delimiter before looking for user information. Colons
+	// inside a bracketed IPv6 host are part of the authority.
+	authorityEnd := len(authority)
+	bracketed := false
+	for i, ch := range authority {
+		switch ch {
+		case '[':
+			bracketed = true
+		case ']':
+			bracketed = false
+		case ':':
+			if !bracketed {
+				authorityEnd = i
+			}
+		}
+		if authorityEnd != len(authority) {
+			break
+		}
+	}
+	if at := strings.LastIndex(authority[:authorityEnd], "@"); at >= 0 {
 		user, authority = authority[:at], authority[at+1:]
 	}
 	if strings.HasPrefix(authority, "[") {

@@ -1622,6 +1622,10 @@ func TestSftpSSHProbeTarget(t *testing.T) {
 		{"sftp:user@127.0.0.1:/repo", "127.0.0.1", "user", ""},
 		{"sftp://user@[::1]:2222/repo", "::1", "user", "2222"},
 		{"sftp:127.0.0.1:/repo", "127.0.0.1", "", ""},
+		{"sftp:host:/repo@archive", "host", "", ""},
+		{"sftp:user@host:relative@archive", "host", "user", ""},
+		{"sftp:user@[::1]:/repo@archive", "::1", "user", ""},
+		{"sftp:user@[::1]:2222/repo@archive", "::1", "user", "2222"},
 	}
 
 	for _, tt := range tests {
@@ -1666,6 +1670,71 @@ func TestIsSftpHostKeyVerificationError(t *testing.T) {
 
 	if isSftpHostKeyVerificationError(context.Background(), repo, errors.New("unrelated failure")) {
 		t.Fatal("unrelated Restic errors must not trigger the SSH probe")
+	}
+}
+
+// Exercise the complete fallback, including the argv passed to SSH.
+func TestSftpSSHProbeArguments(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a shell script as a fake ssh executable")
+	}
+	binDir := t.TempDir()
+	capture := filepath.Join(binDir, "args")
+	script := "#!/bin/sh\nprintf '%s\n' \"$@\" > \"$SSH_PROBE_CAPTURE\"\necho 'Host key verification failed.' >&2\nexit 255\n"
+	if err := os.WriteFile(filepath.Join(binDir, "ssh"), []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+	t.Setenv("SSH_PROBE_CAPTURE", capture)
+	t.Setenv("PROBE_URI", "sftp:user@resolved-host:/repo@archive")
+	t.Setenv("PROBE_HOST", "resolved-host")
+	t.Setenv("PROBE_PORT", "2222")
+	for _, tc := range []struct {
+		name  string
+		uri   string
+		flags []string
+	}{
+		{"literal", "sftp:user@resolved-host:/repo@archive", []string{`--option=sftp.args='-p 2222'`}},
+		{"expanded URI", "${PROBE_URI}", []string{`--option=sftp.args='-p 2222'`}},
+		{"expanded host", "sftp:user@${PROBE_HOST}:/repo", []string{`--option=sftp.args='-p 2222'`}},
+		{"long separate", "${PROBE_URI}", []string{`--option sftp.args="-p 2222" # comment`}},
+		{"short separate", "${PROBE_URI}", []string{`-o 'sftp.args=-p 2222'`}},
+		{"short attached", "${PROBE_URI}", []string{`-osftp.args='-p 2222'`}},
+		{"short equals", "${PROBE_URI}", []string{`-o=sftp.args='-p 2222'`}},
+		{"separate entries", "${PROBE_URI}", []string{`-o`, `sftp.args="-p 2222"`}},
+		{"expanded port", "${PROBE_URI}", []string{`-o sftp.args="-p ${PROBE_PORT}"`}},
+		{"URI port", "sftp://user@resolved-host:2222/repo", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &v1.Repo{Uri: tc.uri, Flags: tc.flags}
+			if !isSftpHostKeyVerificationError(context.Background(), cfg, errors.New(sftpStartupEOF)) {
+				t.Fatal("expected host-key failure")
+			}
+			got, err := os.ReadFile(capture)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "-o\nBatchMode=yes\n-o\nConnectTimeout=5\n-p\n2222\n-l\nuser\nresolved-host\n-s\nsftp\n"
+			if string(got) != want {
+				t.Fatalf("SSH argv = %q; want %q", got, want)
+			}
+		})
+	}
+	for _, flags := range [][]string{
+		{`--option sftp.command="custom ssh"`},
+		{`-o=sftp.command=custom`},
+		{`--option=sftp.args='-p 2222'`, `-o sftp.command=custom`},
+		{`-o sftp.args="unterminated`},
+	} {
+		if err := os.Remove(capture); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		if isSftpHostKeyVerificationError(context.Background(), &v1.Repo{Uri: "${PROBE_URI}", Flags: flags}, errors.New(sftpStartupEOF)) {
+			t.Fatalf("unexpected probe success for %q", flags)
+		}
+		if _, err := os.Stat(capture); !os.IsNotExist(err) {
+			t.Fatalf("probe ran for %q", flags)
+		}
 	}
 }
 

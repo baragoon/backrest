@@ -21,13 +21,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// parseFlagArgs parses flag arguments with comment and escaped-space handling
+// ParseFlagArgs parses flag arguments with comment and escaped-space handling
 // compatible with the previous shlex-based behavior.
 // - Removes unquoted comments (text after # outside quotes, through the next newline)
 // - Treats unquoted CRLF as whitespace before splitting
 // - Unescapes backslash-escaped spaces only within double-quoted fragments
 // - Preserves literal backslashes in single-quoted fragments
-func parseFlagArgs(input string) ([]string, error) {
+func ParseFlagArgs(input string) ([]string, error) {
 	// First pass: normalize CRLF and strip comments that occur at word boundaries
 	// A comment is an unquoted # that appears at input start or after whitespace
 	escaped := false
@@ -276,7 +276,7 @@ func NewRepoOrchestrator(config *v1.Config, repoConfig *v1.Repo, resticPath stri
 	}
 
 	for _, f := range repoConfig.GetFlags() {
-		args, err := parseFlagArgs(ExpandEnv(f))
+		args, err := ParseFlagArgs(ExpandEnv(f))
 		if err != nil {
 			return nil, fmt.Errorf("parse flag %q for repo %q: %w", f, repoConfig.Id, err)
 		}
@@ -389,7 +389,7 @@ func (r *RepoOrchestrator) Backup(ctx context.Context, plan *v1.Plan, dryRun boo
 	}
 
 	for _, f := range plan.GetBackupFlags() {
-		args, err := parseFlagArgs(f)
+		args, err := ParseFlagArgs(f)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse backup flag %q for plan %q: %w", f, plan.Id, err)
 		}
@@ -632,7 +632,7 @@ func (r *RepoOrchestrator) RunCommand(ctx context.Context, command string, write
 	defer flush()
 
 	r.logger(ctx).Debug("running command", zap.String("command", command))
-	args, err := parseFlagArgs(command)
+	args, err := ParseFlagArgs(command)
 	if err != nil {
 		return fmt.Errorf("parse command: %w", err)
 	}
