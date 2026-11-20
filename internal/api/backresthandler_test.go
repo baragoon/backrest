@@ -1593,7 +1593,6 @@ func TestIsHostKeyVerificationError(t *testing.T) {
 		{
 			name: "restic drops ssh diagnostic",
 			err:  errors.New("unable to start the sftp session, error: error receiving version packet from server: server unexpectedly closed connection: unexpected EOF"),
-			want: true,
 		},
 		{
 			name: "unrelated EOF",
@@ -1610,6 +1609,63 @@ func TestIsHostKeyVerificationError(t *testing.T) {
 				t.Errorf("isHostKeyVerificationError(%v) = %v, want %v", tt.err, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestSftpSSHProbeTarget(t *testing.T) {
+	tests := []struct {
+		uri      string
+		wantHost string
+		wantUser string
+		wantPort string
+	}{
+		{"sftp:user@127.0.0.1:/repo", "127.0.0.1", "user", ""},
+		{"sftp://user@[::1]:2222/repo", "::1", "user", "2222"},
+		{"sftp:127.0.0.1:/repo", "127.0.0.1", "", ""},
+	}
+
+	for _, tt := range tests {
+		host, user, port, ok := sftpSSHProbeTarget(tt.uri)
+		if !ok || host != tt.wantHost || user != tt.wantUser || port != tt.wantPort {
+			t.Errorf("sftpSSHProbeTarget(%q) = %q, %q, %q, %v; want %q, %q, %q, true",
+				tt.uri, host, user, port, ok, tt.wantHost, tt.wantUser, tt.wantPort)
+		}
+	}
+}
+
+func TestIsSftpHostKeyVerificationError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a shell script as a fake ssh executable")
+	}
+
+	binDir := t.TempDir()
+	sshPath := filepath.Join(binDir, "ssh")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$SSH_PROBE_OUTPUT\" >&2\nexit 255\n"
+	if err := os.WriteFile(sshPath, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+
+	repo := &v1.Repo{
+		Uri: "sftp:user@127.0.0.1:/repo",
+		Flags: []string{
+			"--option=sftp.args='-oBatchMode=yes -p 2222 -oUserKnownHostsFile=/tmp/known_hosts'",
+		},
+	}
+	startupErr := errors.New("unable to start the sftp session: " + sftpStartupEOF)
+
+	t.Setenv("SSH_PROBE_OUTPUT", "Host key verification failed.")
+	if !isSftpHostKeyVerificationError(context.Background(), repo, startupErr) {
+		t.Fatal("expected host-key probe diagnostic to be recognized")
+	}
+
+	t.Setenv("SSH_PROBE_OUTPUT", "ssh: connect to host 127.0.0.1 port 2222: Connection refused")
+	if isSftpHostKeyVerificationError(context.Background(), repo, startupErr) {
+		t.Fatal("connection refusal must not be classified as a host-key failure")
+	}
+
+	if isSftpHostKeyVerificationError(context.Background(), repo, errors.New("unrelated failure")) {
+		t.Fatal("unrelated Restic errors must not trigger the SSH probe")
 	}
 }
 

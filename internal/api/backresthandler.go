@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -32,6 +34,7 @@ import (
 	"github.com/baragoon/backrest/internal/protoutil"
 	"github.com/baragoon/backrest/internal/resticinstaller"
 	"github.com/baragoon/backrest/pkg/restic"
+	"github.com/kballard/go-shellquote"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -152,7 +155,7 @@ func (s *BackrestHandler) CheckRepoExists(ctx context.Context, req *connect.Requ
 		// to stderr, which surfaces inside the wrapped restic error. Report this
 		// to the UI so it can offer the host-key trust / Setup SSH Key flow instead
 		// of a generic error.
-		if isHostKeyVerificationError(err) {
+		if isHostKeyVerificationError(err) || isSftpHostKeyVerificationError(ctx, req.Msg.Repo, err) {
 			zap.S().Debugf("repo %q host key untrusted", req.Msg.Repo.Id)
 			return connect.NewResponse(&v1.CheckRepoExistsResponse{HostKeyUntrusted: true}), nil
 		}
@@ -162,14 +165,13 @@ func (s *BackrestHandler) CheckRepoExists(ctx context.Context, req *connect.Requ
 }
 
 // hostKeyVerificationMarkers are substrings (matched case-insensitively) that
-// indicate an SSH host-key verification failure. Restic normally forwards ssh's
-// diagnostic, but its sftp backend can exit before the diagnostic is copied
-// under load, leaving only the version-packet EOF error.
+// OpenSSH emits when it refuses a connection because of host-key verification.
 var hostKeyVerificationMarkers = []string{
 	"host key verification failed",
 	"remote host identification has changed",
-	"error receiving version packet from server: server unexpectedly closed connection: unexpected eof",
 }
+
+const sftpStartupEOF = "error receiving version packet from server: server unexpectedly closed connection: unexpected eof"
 
 // isHostKeyVerificationError reports whether err (anywhere in its chain of
 // wrapped messages) looks like an ssh host-key verification failure.
@@ -184,6 +186,105 @@ func isHostKeyVerificationError(err error) bool {
 		}
 	}
 	return false
+}
+
+// isSftpHostKeyVerificationError retries the SSH handshake when Restic reports
+// only its generic SFTP startup EOF. The SSH probe distinguishes a host-key
+// failure from other causes of the same Restic error, such as a refused port.
+func isSftpHostKeyVerificationError(ctx context.Context, repo *v1.Repo, err error) bool {
+	if repo == nil || !strings.Contains(strings.ToLower(repo.GetUri()), "sftp:") {
+		return false
+	}
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), sftpStartupEOF) {
+		return false
+	}
+
+	host, user, uriPort, ok := sftpSSHProbeTarget(repo.GetUri())
+	if !ok {
+		return false
+	}
+
+	var sshArgs []string
+	for _, flag := range repo.GetFlags() {
+		if strings.HasPrefix(flag, "--option=sftp.command=") {
+			return false
+		}
+		if !strings.HasPrefix(flag, "--option=sftp.args=") {
+			continue
+		}
+		value := strings.TrimPrefix(flag, "--option=sftp.args=")
+		value = strings.Trim(value, "'")
+		args, err := shellquote.Split(value)
+		if err != nil {
+			return false
+		}
+		sshArgs = args
+		break
+	}
+
+	if uriPort != "" && !hasSftpPortArg(sshArgs) {
+		sshArgs = append(sshArgs, "-p", uriPort)
+	}
+	sshArgs = append([]string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=5"}, sshArgs...)
+	if user != "" {
+		sshArgs = append(sshArgs, "-l", user)
+	}
+	sshArgs = append(sshArgs, host, "-s", "sftp")
+
+	probeCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	defer cancel()
+	output, _ := exec.CommandContext(probeCtx, "ssh", sshArgs...).CombinedOutput()
+	return isHostKeyVerificationError(errors.New(string(output)))
+}
+
+func hasSftpPortArg(args []string) bool {
+	for i, arg := range args {
+		if arg == "-p" && i+1 < len(args) {
+			return true
+		}
+		if strings.HasPrefix(arg, "-p") && len(arg) > 2 {
+			return true
+		}
+		if strings.HasPrefix(strings.ToLower(arg), "-oport=") {
+			return true
+		}
+	}
+	return false
+}
+
+func sftpSSHProbeTarget(uri string) (host, user, port string, ok bool) {
+	if strings.HasPrefix(uri, "sftp://") {
+		u, err := url.Parse(uri)
+		if err != nil || u.Hostname() == "" {
+			return "", "", "", false
+		}
+		if u.User != nil {
+			user = u.User.Username()
+		}
+		return u.Hostname(), user, u.Port(), true
+	}
+
+	if !strings.HasPrefix(uri, "sftp:") {
+		return "", "", "", false
+	}
+	authority := strings.TrimPrefix(uri, "sftp:")
+	if at := strings.LastIndex(authority, "@"); at >= 0 {
+		user, authority = authority[:at], authority[at+1:]
+	}
+	if strings.HasPrefix(authority, "[") {
+		end := strings.IndexByte(authority, ']')
+		if end < 0 {
+			return "", "", "", false
+		}
+		host = authority[1:end]
+		authority = authority[end+1:]
+		if strings.HasPrefix(authority, ":") && !strings.HasPrefix(authority[1:], "/") {
+			port = strings.SplitN(authority[1:], "/", 2)[0]
+		}
+	} else {
+		host = strings.SplitN(authority, ":", 2)[0]
+	}
+	return host, user, port, host != ""
 }
 
 // AddRepo implements POST /v1/config/repo, it includes validation that the repo can be initialized.
