@@ -229,14 +229,27 @@ func TestSchedulerWait(t *testing.T) {
 			if didRun {
 				return nil
 			}
-			t = t.Add(100 * time.Millisecond)
+			t = t.Add(time.Second)
 			didRun = true
 			return &t
 		},
 	), tasks.TaskPriorityDefault)
 
-	// Act
-	go orch.Run(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go orch.Run(ctx)
+
+	waitTimer := time.NewTimer(time.Second)
+	defer waitTimer.Stop()
+	waitTicker := time.NewTicker(time.Millisecond)
+	defer waitTicker.Stop()
+	for !orch.taskQueue.HasDequeueWaiter() {
+		select {
+		case <-waitTimer.C:
+			t.Fatal("orchestrator did not register to wait for queued tasks")
+		case <-waitTicker.C:
+		}
+	}
 
 	// Assert
 	select {
@@ -258,7 +271,7 @@ func TestSchedulerWait(t *testing.T) {
 	}, tasks.TaskPriorityDefault)
 
 	select {
-	case <-time.NewTimer(200 * time.Millisecond).C:
+	case <-time.NewTimer(2 * time.Second).C:
 		t.Errorf("expected task to run")
 	case <-ran:
 	}

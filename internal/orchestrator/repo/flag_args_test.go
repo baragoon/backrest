@@ -30,17 +30,17 @@ func TestParseFlagArgsCompatibility(t *testing.T) {
 		{`--path="C:\Program Files\App"`, []string{`--path=C:\Program Files\App`}},
 		{`"\\\\server\\share"`, []string{`\\server\share`}},
 	} {
-		got, err := parseFlagArgs(tc.input)
+		got, err := ParseFlagArgs(tc.input)
 		if err != nil || !reflect.DeepEqual(got, tc.want) {
-			t.Errorf("parseFlagArgs(%q) = %q, %v; want %q", tc.input, got, err, tc.want)
+			t.Errorf("ParseFlagArgs(%q) = %q, %v; want %q", tc.input, got, err, tc.want)
 		}
 	}
 }
 
 func TestParseFlagArgsUnfinishedSyntax(t *testing.T) {
 	for _, input := range []string{`"`, `'`, `\`, `foo "bar`, `foo 'bar`, `foo\`, `""\`, `ok '' "`} {
-		if got, err := parseFlagArgs(input); err == nil {
-			t.Errorf("parseFlagArgs(%q) = %q without error", input, got)
+		if got, err := ParseFlagArgs(input); err == nil {
+			t.Errorf("ParseFlagArgs(%q) = %q without error", input, got)
 		}
 	}
 }

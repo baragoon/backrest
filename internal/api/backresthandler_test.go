@@ -1574,6 +1574,173 @@ func TestSanitizeRepoFlags(t *testing.T) {
 	}
 }
 
+func TestIsHostKeyVerificationError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "host key verification failed",
+			err:  errors.New("subprocess ssh: Host key verification failed."),
+			want: true,
+		},
+		{
+			name: "host key changed",
+			err:  errors.New("REMOTE HOST IDENTIFICATION HAS CHANGED"),
+			want: true,
+		},
+		{
+			name: "restic drops ssh diagnostic",
+			err:  errors.New("unable to start the sftp session, error: error receiving version packet from server: server unexpectedly closed connection: unexpected EOF"),
+		},
+		{
+			name: "unrelated EOF",
+			err:  errors.New("server unexpectedly closed connection: unexpected EOF"),
+		},
+		{
+			name: "nil error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isHostKeyVerificationError(tt.err); got != tt.want {
+				t.Errorf("isHostKeyVerificationError(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSftpSSHProbeTarget(t *testing.T) {
+	tests := []struct {
+		uri      string
+		wantHost string
+		wantUser string
+		wantPort string
+	}{
+		{"sftp:user@127.0.0.1:/repo", "127.0.0.1", "user", ""},
+		{"sftp://user@[::1]:2222/repo", "::1", "user", "2222"},
+		{"sftp:127.0.0.1:/repo", "127.0.0.1", "", ""},
+		{"sftp:host:/repo@archive", "host", "", ""},
+		{"sftp:user@host:relative@archive", "host", "user", ""},
+		{"sftp:user@[::1]:/repo@archive", "::1", "user", ""},
+		{"sftp:user@[::1]:2222/repo@archive", "::1", "user", "2222"},
+	}
+
+	for _, tt := range tests {
+		host, user, port, ok := sftpSSHProbeTarget(tt.uri)
+		if !ok || host != tt.wantHost || user != tt.wantUser || port != tt.wantPort {
+			t.Errorf("sftpSSHProbeTarget(%q) = %q, %q, %q, %v; want %q, %q, %q, true",
+				tt.uri, host, user, port, ok, tt.wantHost, tt.wantUser, tt.wantPort)
+		}
+	}
+}
+
+func TestIsSftpHostKeyVerificationError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a shell script as a fake ssh executable")
+	}
+
+	binDir := t.TempDir()
+	sshPath := filepath.Join(binDir, "ssh")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$SSH_PROBE_OUTPUT\" >&2\nexit 255\n"
+	if err := os.WriteFile(sshPath, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+
+	repo := &v1.Repo{
+		Uri: "sftp:user@127.0.0.1:/repo",
+		Flags: []string{
+			"--option=sftp.args='-oBatchMode=yes -p 2222 -oUserKnownHostsFile=/tmp/known_hosts'",
+		},
+	}
+	startupErr := errors.New("unable to start the sftp session: " + sftpStartupEOF)
+
+	t.Setenv("SSH_PROBE_OUTPUT", "Host key verification failed.")
+	if !isSftpHostKeyVerificationError(context.Background(), repo, startupErr) {
+		t.Fatal("expected host-key probe diagnostic to be recognized")
+	}
+	if err := repoInitError(context.Background(), repo, startupErr); !isHostKeyVerificationError(err) {
+		t.Fatalf("repo init error should expose a host-key diagnostic to the UI: %v", err)
+	}
+
+	t.Setenv("SSH_PROBE_OUTPUT", "ssh: connect to host 127.0.0.1 port 2222: Connection refused")
+	if isSftpHostKeyVerificationError(context.Background(), repo, startupErr) {
+		t.Fatal("connection refusal must not be classified as a host-key failure")
+	}
+
+	if isSftpHostKeyVerificationError(context.Background(), repo, errors.New("unrelated failure")) {
+		t.Fatal("unrelated Restic errors must not trigger the SSH probe")
+	}
+}
+
+// Exercise the complete fallback, including the argv passed to SSH.
+func TestSftpSSHProbeArguments(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a shell script as a fake ssh executable")
+	}
+	binDir := t.TempDir()
+	capture := filepath.Join(binDir, "args")
+	script := "#!/bin/sh\nprintf '%s\n' \"$@\" > \"$SSH_PROBE_CAPTURE\"\necho 'Host key verification failed.' >&2\nexit 255\n"
+	if err := os.WriteFile(filepath.Join(binDir, "ssh"), []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+	t.Setenv("SSH_PROBE_CAPTURE", capture)
+	t.Setenv("PROBE_URI", "sftp:user@resolved-host:/repo@archive")
+	t.Setenv("PROBE_HOST", "resolved-host")
+	t.Setenv("PROBE_PORT", "2222")
+	for _, tc := range []struct {
+		name  string
+		uri   string
+		flags []string
+	}{
+		{"literal", "sftp:user@resolved-host:/repo@archive", []string{`--option=sftp.args='-p 2222'`}},
+		{"expanded URI", "${PROBE_URI}", []string{`--option=sftp.args='-p 2222'`}},
+		{"expanded host", "sftp:user@${PROBE_HOST}:/repo", []string{`--option=sftp.args='-p 2222'`}},
+		{"long separate", "${PROBE_URI}", []string{`--option sftp.args="-p 2222" # comment`}},
+		{"short separate", "${PROBE_URI}", []string{`-o 'sftp.args=-p 2222'`}},
+		{"short attached", "${PROBE_URI}", []string{`-osftp.args='-p 2222'`}},
+		{"short equals", "${PROBE_URI}", []string{`-o=sftp.args='-p 2222'`}},
+		{"separate entries", "${PROBE_URI}", []string{`-o`, `sftp.args="-p 2222"`}},
+		{"expanded port", "${PROBE_URI}", []string{`-o sftp.args="-p ${PROBE_PORT}"`}},
+		{"URI port", "sftp://user@resolved-host:2222/repo", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &v1.Repo{Uri: tc.uri, Flags: tc.flags}
+			if !isSftpHostKeyVerificationError(context.Background(), cfg, errors.New(sftpStartupEOF)) {
+				t.Fatal("expected host-key failure")
+			}
+			got, err := os.ReadFile(capture)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "-o\nBatchMode=yes\n-p\n2222\n-l\nuser\nresolved-host\n-s\nsftp\n"
+			if string(got) != want {
+				t.Fatalf("SSH argv = %q; want %q", got, want)
+			}
+		})
+	}
+	for _, flags := range [][]string{
+		{`--option sftp.command="custom ssh"`},
+		{`-o=sftp.command=custom`},
+		{`--option=sftp.args='-p 2222'`, `-o sftp.command=custom`},
+		{`-o sftp.args="unterminated`},
+	} {
+		if err := os.Remove(capture); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		if isSftpHostKeyVerificationError(context.Background(), &v1.Repo{Uri: "${PROBE_URI}", Flags: flags}, errors.New(sftpStartupEOF)) {
+			t.Fatalf("unexpected probe success for %q", flags)
+		}
+		if _, err := os.Stat(capture); !os.IsNotExist(err) {
+			t.Fatalf("probe ran for %q", flags)
+		}
+	}
+}
+
 // TestGetSummaryDashboardOverdue verifies that day buckets are flagged overdue once the
 // gap since the last good backup exceeds the plan schedule's nominal period plus grace.
 func TestGetSummaryDashboardOverdue(t *testing.T) {

@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -32,6 +34,7 @@ import (
 	"github.com/baragoon/backrest/internal/protoutil"
 	"github.com/baragoon/backrest/internal/resticinstaller"
 	"github.com/baragoon/backrest/pkg/restic"
+	"github.com/kballard/go-shellquote"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -152,7 +155,7 @@ func (s *BackrestHandler) CheckRepoExists(ctx context.Context, req *connect.Requ
 		// to stderr, which surfaces inside the wrapped restic error. Report this
 		// to the UI so it can offer the host-key trust / Setup SSH Key flow instead
 		// of a generic error.
-		if isHostKeyVerificationError(err) {
+		if isHostKeyVerificationError(err) || isSftpHostKeyVerificationError(ctx, req.Msg.Repo, err) {
 			zap.S().Debugf("repo %q host key untrusted", req.Msg.Repo.Id)
 			return connect.NewResponse(&v1.CheckRepoExistsResponse{HostKeyUntrusted: true}), nil
 		}
@@ -162,13 +165,14 @@ func (s *BackrestHandler) CheckRepoExists(ctx context.Context, req *connect.Requ
 }
 
 // hostKeyVerificationMarkers are substrings (matched case-insensitively) that
-// OpenSSH emits to stderr when it refuses to connect because the server's host
-// key is unknown or does not match the pinned known_hosts entry. restic's sftp
-// backend forwards ssh's stderr into the error it returns.
+// OpenSSH emits when it refuses a connection because of host-key verification.
 var hostKeyVerificationMarkers = []string{
 	"host key verification failed",
 	"remote host identification has changed",
 }
+
+const sftpStartupEOF = "error receiving version packet from server: server unexpectedly closed connection: unexpected eof"
+const sftpSSHProbeTimeout = 30 * time.Second
 
 // isHostKeyVerificationError reports whether err (anywhere in its chain of
 // wrapped messages) looks like an ssh host-key verification failure.
@@ -183,6 +187,156 @@ func isHostKeyVerificationError(err error) bool {
 		}
 	}
 	return false
+}
+
+// isSftpHostKeyVerificationError retries the SSH handshake when Restic reports
+// only its generic SFTP startup EOF. The SSH probe distinguishes a host-key
+// failure from other causes of the same Restic error, such as a refused port.
+func isSftpHostKeyVerificationError(ctx context.Context, repoConfig *v1.Repo, err error) bool {
+	if repoConfig == nil {
+		return false
+	}
+	uri := repo.ExpandEnv(repoConfig.GetUri())
+	if !strings.HasPrefix(strings.ToLower(uri), "sftp:") {
+		return false
+	}
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), sftpStartupEOF) {
+		return false
+	}
+
+	host, user, uriPort, ok := sftpSSHProbeTarget(uri)
+	if !ok {
+		return false
+	}
+
+	var flags []string
+	for _, flag := range repoConfig.GetFlags() {
+		args, err := repo.ParseFlagArgs(repo.ExpandEnv(flag))
+		if err != nil {
+			return false
+		}
+		flags = append(flags, args...)
+	}
+	var sshArgs []string
+	for i := 0; i < len(flags); i++ {
+		var option string
+		switch {
+		case flags[i] == "--option" || flags[i] == "-o":
+			i++
+			if i == len(flags) {
+				return false
+			}
+			option = flags[i]
+		case strings.HasPrefix(flags[i], "--option="):
+			option = strings.TrimPrefix(flags[i], "--option=")
+		case strings.HasPrefix(flags[i], "-o"):
+			option = strings.TrimPrefix(strings.TrimPrefix(flags[i], "-o"), "=")
+		default:
+			continue
+		}
+		if strings.HasPrefix(option, "sftp.command=") {
+			return false
+		}
+		if strings.HasPrefix(option, "sftp.args=") {
+			args, err := shellquote.Split(strings.TrimPrefix(option, "sftp.args="))
+			if err != nil {
+				return false
+			}
+			sshArgs = args
+		}
+	}
+
+	if uriPort != "" && !hasSftpPortArg(sshArgs) {
+		sshArgs = append(sshArgs, "-p", uriPort)
+	}
+	sshArgs = append([]string{"-o", "BatchMode=yes"}, sshArgs...)
+	if user != "" {
+		sshArgs = append(sshArgs, "-l", user)
+	}
+	sshArgs = append(sshArgs, host, "-s", "sftp")
+
+	probeCtx, cancel := context.WithTimeout(ctx, sftpSSHProbeTimeout)
+	defer cancel()
+	output, _ := exec.CommandContext(probeCtx, "ssh", sshArgs...).CombinedOutput()
+	return isHostKeyVerificationError(errors.New(string(output)))
+}
+
+func repoInitError(ctx context.Context, repoConfig *v1.Repo, err error) error {
+	if isHostKeyVerificationError(err) || isSftpHostKeyVerificationError(ctx, repoConfig, err) {
+		return fmt.Errorf("host key verification failed while initializing repo: %w", err)
+	}
+	return fmt.Errorf("failed to init repo: %w", err)
+}
+
+func hasSftpPortArg(args []string) bool {
+	for i, arg := range args {
+		if arg == "-p" && i+1 < len(args) {
+			return true
+		}
+		if strings.HasPrefix(arg, "-p") && len(arg) > 2 {
+			return true
+		}
+		lower := strings.ToLower(arg)
+		if strings.HasPrefix(lower, "-oport=") ||
+			(arg == "-o" && i+1 < len(args) && strings.HasPrefix(strings.ToLower(args[i+1]), "port=")) {
+			return true
+		}
+	}
+	return false
+}
+
+func sftpSSHProbeTarget(uri string) (host, user, port string, ok bool) {
+	if strings.HasPrefix(uri, "sftp://") {
+		u, err := url.Parse(uri)
+		if err != nil || u.Hostname() == "" {
+			return "", "", "", false
+		}
+		if u.User != nil {
+			user = u.User.Username()
+		}
+		return u.Hostname(), user, u.Port(), true
+	}
+
+	if !strings.HasPrefix(uri, "sftp:") {
+		return "", "", "", false
+	}
+	authority := strings.TrimPrefix(uri, "sftp:")
+	// Locate the path delimiter before looking for user information. Colons
+	// inside a bracketed IPv6 host are part of the authority.
+	authorityEnd := len(authority)
+	bracketed := false
+	for i, ch := range authority {
+		switch ch {
+		case '[':
+			bracketed = true
+		case ']':
+			bracketed = false
+		case ':':
+			if !bracketed {
+				authorityEnd = i
+			}
+		}
+		if authorityEnd != len(authority) {
+			break
+		}
+	}
+	if at := strings.LastIndex(authority[:authorityEnd], "@"); at >= 0 {
+		user, authority = authority[:at], authority[at+1:]
+	}
+	if strings.HasPrefix(authority, "[") {
+		end := strings.IndexByte(authority, ']')
+		if end < 0 {
+			return "", "", "", false
+		}
+		host = authority[1:end]
+		authority = authority[end+1:]
+		if strings.HasPrefix(authority, ":") && !strings.HasPrefix(authority[1:], "/") {
+			port = strings.SplitN(authority[1:], "/", 2)[0]
+		}
+	} else {
+		host = strings.SplitN(authority, ":", 2)[0]
+	}
+	return host, user, port, host != ""
 }
 
 // AddRepo implements POST /v1/config/repo, it includes validation that the repo can be initialized.
@@ -203,7 +357,7 @@ func (s *BackrestHandler) AddRepo(ctx context.Context, req *connect.Request[v1.A
 	}
 
 	if err := r.Init(ctx); err != nil {
-		return nil, fmt.Errorf("failed to init repo: %w", err)
+		return nil, repoInitError(ctx, newRepo, err)
 	}
 
 	guid, err := r.RepoGUID()

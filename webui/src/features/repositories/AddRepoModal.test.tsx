@@ -261,4 +261,5 @@ describe("AddRepoModal", () => {
       screen.getByRole("button", { name: m.add_plan_modal_button_submit() }),
     ).not.toBeDisabled();
   });
+
 });
