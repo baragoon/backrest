@@ -68,7 +68,7 @@ Once installed, access Backrest at `http://localhost:9898` (default port). First
 > [!NOTE]
 > To change the default port, set the `BACKREST_PORT` environment variable (e.g., `BACKREST_PORT=0.0.0.0:9898` to listen on all interfaces). The install script accepts `--allow-remote-access` as a shortcut for this.
 >
-> Backrest will use your system's installed version of restic if it's available and compatible. If not, Backrest will download and install a suitable version in its data directory, keeping it updated. To use a specific restic binary, set the `BACKREST_RESTIC_COMMAND` environment variable to the desired path.
+> Backrest will use your system's installed version of restic if it's available and compatible. If not, Backrest will download and install a suitable version in its data directory, keeping it updated. On Unix, if an update fails, Backrest will warn and use an existing runnable managed binary, which may not be supported. To use a specific restic binary, set the `BACKREST_RESTIC_COMMAND` environment variable to the desired path.
 
 ## Linux & macOS (Recommended)
 

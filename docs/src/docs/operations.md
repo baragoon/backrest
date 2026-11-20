@@ -13,6 +13,7 @@ Backrest executes operations through the [restic](https://restic.net) backup too
   3. The system `$PATH`
 - **Version Requirement**: Backrest is only tested against the latest version of restic. It will selectively reject outdated versions.
 - **Auto-download**: If no valid binary is found, Backrest downloads a verified version from [GitHub releases](https://github.com/restic/restic/releases).
+- **Unix upgrade fallback**: If an update fails, Backrest warns and uses the existing runnable managed binary. That version may not be supported.
 - **Verification**: Downloads are verified using SHA256 checksums signed by restic maintainers.
 - **Override**: Set `BACKREST_RESTIC_COMMAND` environment variable to use a custom restic binary.
 
