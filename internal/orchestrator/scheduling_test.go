@@ -218,6 +218,15 @@ func TestSchedulerWait(t *testing.T) {
 	orch := newTestOrchestrator(t)
 	orch.taskQueue.Reset()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	started := make(chan struct{})
+	go func() {
+		close(started)
+		orch.Run(ctx)
+	}()
+	<-started
+
 	ran := make(chan struct{})
 	didRun := false
 	orch.ScheduleTask(newTestTask(
@@ -229,14 +238,11 @@ func TestSchedulerWait(t *testing.T) {
 			if didRun {
 				return nil
 			}
-			t = t.Add(100 * time.Millisecond)
+			t = t.Add(time.Second)
 			didRun = true
 			return &t
 		},
 	), tasks.TaskPriorityDefault)
-
-	// Act
-	go orch.Run(context.Background())
 
 	// Assert
 	select {
@@ -258,7 +264,7 @@ func TestSchedulerWait(t *testing.T) {
 	}, tasks.TaskPriorityDefault)
 
 	select {
-	case <-time.NewTimer(200 * time.Millisecond).C:
+	case <-time.NewTimer(2 * time.Second).C:
 		t.Errorf("expected task to run")
 	case <-ran:
 	}
