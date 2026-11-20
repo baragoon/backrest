@@ -192,7 +192,7 @@ func isHostKeyVerificationError(err error) bool {
 // only its generic SFTP startup EOF. The SSH probe distinguishes a host-key
 // failure from other causes of the same Restic error, such as a refused port.
 func isSftpHostKeyVerificationError(ctx context.Context, repo *v1.Repo, err error) bool {
-	if repo == nil || !strings.Contains(strings.ToLower(repo.GetUri()), "sftp:") {
+	if repo == nil || !strings.HasPrefix(strings.ToLower(repo.GetUri()), "sftp:") {
 		return false
 	}
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), sftpStartupEOF) {
@@ -245,7 +245,9 @@ func hasSftpPortArg(args []string) bool {
 		if strings.HasPrefix(arg, "-p") && len(arg) > 2 {
 			return true
 		}
-		if strings.HasPrefix(strings.ToLower(arg), "-oport=") {
+		lower := strings.ToLower(arg)
+		if strings.HasPrefix(lower, "-oport=") ||
+			(arg == "-o" && i+1 < len(args) && strings.HasPrefix(strings.ToLower(args[i+1]), "port=")) {
 			return true
 		}
 	}
