@@ -125,8 +125,6 @@ func TestConnectionSucceeds(t *testing.T) {
 
 func TestConnectionBadKeyRejected(t *testing.T) {
 	testutil.InstallZapLogger(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
 	peerHostAddr := newSyncListener(t)
 	peerClientAddr := newSyncListener(t)
@@ -165,6 +163,8 @@ func TestConnectionBadKeyRejected(t *testing.T) {
 	startRunningSyncAPI(t, peerHost, peerHostAddr)
 	startRunningSyncAPI(t, peerClient, peerClientAddr)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	waitForConnectionState(t, ctx, peerClient, peerClientConfig.Multihost.KnownHosts[0], v1sync.ConnectionState_CONNECTION_STATE_ERROR_AUTH)
 }
 

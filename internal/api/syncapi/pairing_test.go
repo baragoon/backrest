@@ -130,8 +130,6 @@ func TestValidatePairingSecret(t *testing.T) {
 
 func TestPairingTokenFlow(t *testing.T) {
 	testutil.InstallZapLogger(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
 	peerHostAddr := newSyncListener(t)
 	peerClientAddr := newSyncListener(t)
@@ -186,6 +184,9 @@ func TestPairingTokenFlow(t *testing.T) {
 	startRunningSyncAPI(t, peerHost, peerHostAddr)
 	startRunningSyncAPI(t, peerClient, peerClientAddr)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	// The client should successfully connect via the pairing token.
 	tryConnect(t, ctx, peerClient, peerClientConfig.Multihost.KnownHosts[0])
 
@@ -221,8 +222,6 @@ func TestPairingTokenFlow(t *testing.T) {
 
 func TestPairingTokenExpiredRejected(t *testing.T) {
 	testutil.InstallZapLogger(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
 	peerHostAddr := newSyncListener(t)
 	peerClientAddr := newSyncListener(t)
@@ -272,6 +271,9 @@ func TestPairingTokenExpiredRejected(t *testing.T) {
 	startRunningSyncAPI(t, peerHost, peerHostAddr)
 	startRunningSyncAPI(t, peerClient, peerClientAddr)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	// Connection should fail with auth error.
 	waitForConnectionState(t, ctx, peerClient, peerClientConfig.Multihost.KnownHosts[0], v1sync.ConnectionState_CONNECTION_STATE_ERROR_AUTH)
 
@@ -284,8 +286,6 @@ func TestPairingTokenExpiredRejected(t *testing.T) {
 
 func TestPairingTokenMaxUsesEnforced(t *testing.T) {
 	testutil.InstallZapLogger(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
 	peerHostAddr := newSyncListener(t)
 	peerClient1Addr := newSyncListener(t)
@@ -337,7 +337,7 @@ func TestPairingTokenMaxUsesEnforced(t *testing.T) {
 	peerClient1 := newPeerUnderTest(t, peerClient1Config)
 
 	var wg sync.WaitGroup
-	syncCtx, cancelSync := context.WithCancel(ctx)
+	syncCtx, cancelSync := context.WithCancel(context.Background())
 	t.Cleanup(func() {
 		cancelSync()
 		wg.Wait()
@@ -350,6 +350,8 @@ func TestPairingTokenMaxUsesEnforced(t *testing.T) {
 		runSyncAPIWithCtx(syncCtx, peerClient1, peerClient1Addr)
 	}()
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	tryConnect(t, ctx, peerClient1, peerClient1Config.Multihost.KnownHosts[0])
 
 	// Stop first client, start second client with same pairing secret.
@@ -379,13 +381,13 @@ func TestPairingTokenMaxUsesEnforced(t *testing.T) {
 	startRunningSyncAPI(t, peerClient2, newSyncListener(t))
 
 	// Second client should fail — token is consumed.
-	waitForConnectionState(t, ctx, peerClient2, peerClient2Config.Multihost.KnownHosts[0], v1sync.ConnectionState_CONNECTION_STATE_ERROR_AUTH)
+	secondCtx, cancelSecond := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelSecond()
+	waitForConnectionState(t, secondCtx, peerClient2, peerClient2Config.Multihost.KnownHosts[0], v1sync.ConnectionState_CONNECTION_STATE_ERROR_AUTH)
 }
 
 func TestNoPairingSecretRejected(t *testing.T) {
 	testutil.InstallZapLogger(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
 
 	peerHostAddr := newSyncListener(t)
 	peerClientAddr := newSyncListener(t)
@@ -424,5 +426,7 @@ func TestNoPairingSecretRejected(t *testing.T) {
 	startRunningSyncAPI(t, peerHost, peerHostAddr)
 	startRunningSyncAPI(t, peerClient, peerClientAddr)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	waitForConnectionState(t, ctx, peerClient, peerClientConfig.Multihost.KnownHosts[0], v1sync.ConnectionState_CONNECTION_STATE_ERROR_AUTH)
 }
