@@ -19,7 +19,7 @@ require (
 	github.com/hectane/go-acl v1.0.0
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/mattn/go-colorable v0.1.16
-	github.com/ncruces/go-sqlite3 v0.37.0
+	github.com/ncruces/go-sqlite3 v0.38.0
 	github.com/ncruces/zenity v0.10.15
 	github.com/nicholas-fedor/shoutrrr v0.25.0
 	github.com/pkg/sftp v1.13.12
@@ -51,7 +51,7 @@ require (
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/ncruces/go-sqlite3-wasm/v6 v6.5.35401 // indirect
+	github.com/ncruces/go-sqlite3-wasm/v6 v6.7.35401 // indirect
 	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/common v0.72.0 // indirect
