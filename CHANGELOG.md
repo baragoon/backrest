@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.16.1](https://github.com/baragoon/backrest/compare/v1.16.0...v1.16.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **deps:** update dependency recharts to &gt;=3.9.0 &lt;3.12.0 ([b30826f](https://github.com/baragoon/backrest/commit/b30826fcd05aebe4a64e71755114baab129de27a))
+* **deps:** update dependency recharts to &gt;=3.9.0 &lt;3.12.0 ([6defaef](https://github.com/baragoon/backrest/commit/6defaeff88711e29f417b6bbc324a41b52c1a7ff))
+* **deps:** update module github.com/ncruces/go-sqlite3 to v0.38.0 ([d216d77](https://github.com/baragoon/backrest/commit/d216d7725d2e5b47f53d72fe149afbb1be752065))
+* **deps:** update module github.com/ncruces/go-sqlite3 to v0.38.0 ([3f2d39d](https://github.com/baragoon/backrest/commit/3f2d39df0d177a28008c1bd8ae192a0c2a410a30))
+* Recognize SFTP host-key failures when Restic drops SSH diagnostics ([3ba6a20](https://github.com/baragoon/backrest/commit/3ba6a205780a1f34f212d498cf38dfb813e5e95e))
+* retain managed restic if upgrade fails ([b39f8e4](https://github.com/baragoon/backrest/commit/b39f8e454d79aeea3f0a747948a39344da652061))
+
 ## [1.16.0](https://github.com/baragoon/backrest/compare/v1.15.1...v1.16.0) (2026-11-19)
 
 
