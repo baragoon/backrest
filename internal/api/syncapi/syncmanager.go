@@ -113,7 +113,7 @@ func (m *SyncManager) RunSync(ctx context.Context) {
 		syncWg.Wait()
 	}()
 
-	configWatchCh := m.configMgr.OnChange.Subscribe()
+	configWatchCh := m.configMgr.OnChange.SubscribeWithCapacity(1)
 	defer m.configMgr.OnChange.Unsubscribe(configWatchCh)
 	defer func() {
 		zap.L().Info("syncmanager exited")

@@ -19,12 +19,16 @@ type EventEmitter[T any] struct {
 var _ Receiver[any] = (*EventEmitter[any])(nil) // ensure EventEmitter implements Receiver interface
 
 func (e *EventEmitter[T]) Subscribe() chan T {
+	return e.SubscribeWithCapacity(e.DefaultCapacity)
+}
+
+func (e *EventEmitter[T]) SubscribeWithCapacity(capacity int) chan T {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.subscribers == nil {
 		e.subscribers = make(map[chan T]struct{})
 	}
-	ch := make(chan T, e.DefaultCapacity)
+	ch := make(chan T, capacity)
 	e.subscribers[ch] = struct{}{}
 	return ch
 }

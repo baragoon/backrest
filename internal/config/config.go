@@ -65,6 +65,37 @@ func (m *ConfigManager) Get() (*v1.Config, error) {
 	return m.getCachedLocked()
 }
 
+// WithCurrent calls fn with the current config while updates are excluded.
+// fn must not mutate the config or call ConfigManager methods.
+func (m *ConfigManager) WithCurrent(fn func(*v1.Config) error) error {
+	m.cachedMu.Lock()
+	defer m.cachedMu.Unlock()
+	config, err := m.getCachedLocked()
+	if err != nil {
+		return err
+	}
+	return fn(config)
+}
+
+// GetAndSubscribe returns the current config and a buffered change channel
+// without allowing an update to occur between reading and subscribing.
+func (m *ConfigManager) GetAndSubscribe() (*v1.Config, chan struct{}, error) {
+	return m.getAndSubscribe(func() chan struct{} {
+		return m.OnChange.SubscribeWithCapacity(1)
+	})
+}
+
+func (m *ConfigManager) getAndSubscribe(subscribe func() chan struct{}) (*v1.Config, chan struct{}, error) {
+	m.cachedMu.Lock()
+	defer m.cachedMu.Unlock()
+
+	config, err := m.getCachedLocked()
+	if err != nil {
+		return nil, nil, err
+	}
+	return config, subscribe(), nil
+}
+
 // getCachedLocked returns the cached config, loading from the store if necessary.
 // Must be called with cachedMu held.
 func (m *ConfigManager) getCachedLocked() (*v1.Config, error) {
