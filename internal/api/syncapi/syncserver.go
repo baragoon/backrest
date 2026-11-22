@@ -134,11 +134,7 @@ var _ syncSessionHandler = (*syncSessionHandlerServer)(nil)
 
 func (h *syncSessionHandlerServer) OnConnectionEstablished(ctx context.Context, stream *bidiSyncCommandStream, peer *v1.Multihost_Peer) error {
 	// Verify that the peer is in our authorized clients list
-	config, err := h.mgr.configMgr.Get()
-	if err != nil {
-		return NewSyncErrorInternal(fmt.Errorf("getting config for client authorization: %w", err))
-	}
-	authorizedClientPeerIdx := slices.IndexFunc(config.GetMultihost().GetAuthorizedClients(), func(p *v1.Multihost_Peer) bool {
+	authorizedClientPeerIdx := slices.IndexFunc(h.snapshot.config.Multihost.GetAuthorizedClients(), func(p *v1.Multihost_Peer) bool {
 		return p.InstanceId == peer.InstanceId && p.Keyid == peer.Keyid
 	})
 	if authorizedClientPeerIdx == -1 {
@@ -146,9 +142,10 @@ func (h *syncSessionHandlerServer) OnConnectionEstablished(ctx context.Context, 
 		return NewSyncErrorAuth(errors.New("client is not an authorized peer"))
 	}
 
-	h.peer = config.Multihost.AuthorizedClients[authorizedClientPeerIdx]
+	h.peer = h.snapshot.config.Multihost.AuthorizedClients[authorizedClientPeerIdx]
 	h.l = zap.L().Named(fmt.Sprintf("syncserver handler for peer %q", h.peer.InstanceId))
 
+	var err error
 	h.permissions, err = permissions.NewPermissionSet(h.peer.GetPermissions())
 	if err != nil {
 		h.l.Sugar().Warnf("failed to create permission set for client %q: %v", peer.InstanceId, err)
@@ -461,22 +458,16 @@ func ValidatePairingSecret(secret string, tokens []*v1.Multihost_PairingToken, n
 func (h *BackrestSyncHandler) handleUnknownPeerPairing(snapshot *syncConfigSnapshot) onUnknownPeerFunc {
 	return func(handshake *v1sync.SyncStreamItem) (*v1.Multihost_Peer, error) {
 		pairingSecret := handshake.GetHandshake().GetPairingSecret()
+		if pairingSecret == "" {
+			return nil, fmt.Errorf("unknown peer and no pairing secret provided")
+		}
+
 		peerKeyID := handshake.GetHandshake().GetPublicKey().GetKeyid()
 		peerInstanceID := handshake.GetHandshake().GetInstanceId()
 
 		// Atomically validate the pairing secret and add the client.
 		var newPeer *v1.Multihost_Peer
 		if err := h.mgr.configMgr.Transform(func(cfg *v1.Config) (*v1.Config, error) {
-			// The session snapshot may predate a concurrent successful pairing.
-			for _, peer := range cfg.GetMultihost().GetAuthorizedClients() {
-				if peer.GetKeyid() == peerKeyID {
-					newPeer = peer
-					return nil, nil
-				}
-			}
-			if pairingSecret == "" {
-				return nil, fmt.Errorf("unknown peer and no pairing secret provided")
-			}
 			token, err := ValidatePairingSecret(pairingSecret, cfg.GetMultihost().GetPairingTokens(), time.Now())
 			if err != nil {
 				zap.S().Warnf("rejected pairing attempt from %q (%s): %v", peerInstanceID, peerKeyID, err)
