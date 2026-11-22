@@ -76,8 +76,8 @@ importers:
         version: 3.10.1(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react-is@18.3.1)(react@19.3.1)(redux@5.0.1)
     devDependencies:
       '@google/genai':
-        specifier: 3.4.0
-        version: 3.4.0(supports-color@7.2.0)
+        specifier: 3.6.1
+        version: 3.6.1(supports-color@7.2.0)
       '@inlang/cli':
         specifier: 3.6.0
         version: 3.6.0
@@ -610,8 +610,8 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@google/genai@3.4.0':
-    resolution: {integrity: sha512-qjsg+KMRSUmQSkg/BVwcbgE/ROVo91Lx933SOicDlS7viU+Z7sBwK/c8TMvW/9W0OvBy17rwa+/sXn0kdKrDZw==}
+  '@google/genai@3.6.1':
+    resolution: {integrity: sha512-DQIkZkl+VoZc+RUSaJ41vRuywjQDpP0t/oUf5/ddQhNW6JsPjVULW2EgHmuJ1mrr6ACtrmUdPlqtNXF1yfKySg==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -3621,7 +3621,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@google/genai@3.4.0(supports-color@7.2.0)':
+  '@google/genai@3.6.1(supports-color@7.2.0)':
     dependencies:
       google-auth-library: 10.9.1(supports-color@7.2.0)
       p-retry: 4.6.2
