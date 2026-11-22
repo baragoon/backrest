@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.2](https://github.com/baragoon/backrest/compare/v1.16.1...v1.16.2) (2026-11-22)
+
+
+### Bug Fixes
+
+* sync pairing authorization races ([e1cd703](https://github.com/baragoon/backrest/commit/e1cd703a1fe6efef261bbfd6134e952d7153efe9))
+
 ## [1.16.1](https://github.com/baragoon/backrest/compare/v1.16.0...v1.16.1) (2026-11-21)
 
 
