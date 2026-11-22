@@ -12,6 +12,7 @@ import (
 	"github.com/baragoon/backrest/internal/config/migrations"
 	"github.com/baragoon/backrest/internal/cryptoutil"
 	"github.com/baragoon/backrest/internal/testutil"
+	"go.uber.org/zap"
 )
 
 func TestValidatePairingSecret(t *testing.T) {
@@ -217,6 +218,123 @@ func TestPairingTokenFlow(t *testing.T) {
 	// Verify the pairing token was consumed (max_uses=1, so it should be removed).
 	if len(hostConfig.Multihost.PairingTokens) != 0 {
 		t.Errorf("expected 0 pairing tokens after consumption, got %d", len(hostConfig.Multihost.PairingTokens))
+	}
+
+	testutil.Try(t, ctx, func() error {
+		cfg, err := peerClient.configMgr.Get()
+		if err != nil {
+			return err
+		}
+		if cfg.Multihost.KnownHosts[0].InitialPairingSecret != "" {
+			return fmt.Errorf("pairing secret not cleared after authorization")
+		}
+		return nil
+	})
+}
+
+func TestPairingSecretClearedOnlyAfterServerConfirmation(t *testing.T) {
+	for _, replaceSecret := range []bool{false, true} {
+		t.Run(fmt.Sprintf("replaceSecret=%t", replaceSecret), func(t *testing.T) {
+			host := &v1.Multihost_Peer{Keyid: identity1.Keyid, InstanceId: defaultHostID, InstanceUrl: "http://127.0.0.1:1234", InitialPairingSecret: "initial-secret"}
+			cfg := &v1.Config{
+				Version:  migrations.CurrentVersion,
+				Instance: defaultClientID,
+				Multihost: &v1.Multihost{
+					Identity:   identity2,
+					KnownHosts: []*v1.Multihost_Peer{host},
+				},
+			}
+			client := newPeerUnderTest(t, cfg)
+			snapshot, err := client.configMgr.Get()
+			if err != nil {
+				t.Fatal(err)
+			}
+			handler := newSyncHandlerClient(zap.NewNop(), client.manager, syncConfigSnapshot{config: snapshot}, client.oplog, snapshot.Multihost.KnownHosts[0])
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			defer handler.OnConnectionDisconnected()
+			stream := newBidiSyncCommandStream()
+			if err := handler.OnConnectionEstablished(ctx, stream, handler.peer); err != nil {
+				t.Fatal(err)
+			}
+			current, err := client.configMgr.Get()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := current.Multihost.KnownHosts[0].InitialPairingSecret; got != "initial-secret" {
+				t.Fatalf("secret after handshake = %q, want initial-secret", got)
+			}
+			if err := handler.HandleReceiveConfig(ctx, stream, &v1sync.SyncStreamItem_SyncActionReceiveConfig{}); err == nil {
+				t.Fatal("expected invalid remote config to be rejected")
+			}
+			current, _ = client.configMgr.Get()
+			if got := current.Multihost.KnownHosts[0].InitialPairingSecret; got != "initial-secret" {
+				t.Fatalf("secret after invalid confirmation = %q, want initial-secret", got)
+			}
+			if replaceSecret {
+				if err := client.configMgr.Transform(func(cfg *v1.Config) (*v1.Config, error) {
+					cfg.Multihost.KnownHosts[0].InitialPairingSecret = "replacement-secret"
+					return cfg, nil
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := handler.HandleReceiveConfig(ctx, stream, &v1sync.SyncStreamItem_SyncActionReceiveConfig{Config: &v1sync.RemoteConfig{}}); err != nil {
+				t.Fatal(err)
+			}
+			current, _ = client.configMgr.Get()
+			want := ""
+			if replaceSecret {
+				want = "replacement-secret"
+			}
+			if got := current.Multihost.KnownHosts[0].InitialPairingSecret; got != want {
+				t.Fatalf("secret after confirmation = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestPairingWithStaleServerSnapshot(t *testing.T) {
+	cfg := &v1.Config{
+		Version:   migrations.CurrentVersion,
+		Instance:  defaultHostID,
+		Multihost: &v1.Multihost{Identity: identity1},
+	}
+	host := newPeerUnderTest(t, cfg)
+	snapshotConfig, err := host.configMgr.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := &syncConfigSnapshot{config: snapshotConfig}
+	if err := host.configMgr.Transform(func(cfg *v1.Config) (*v1.Config, error) {
+		cfg.Multihost.AuthorizedClients = append(cfg.Multihost.AuthorizedClients, &v1.Multihost_Peer{
+			Keyid: identity2.Keyid, InstanceId: defaultClientID,
+		})
+		return cfg, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	key, err := cryptoutil.NewPrivateKey(identity2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	packet, err := createHandshakePacket(defaultClientID, key, "", freshTranscript(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer, err := (&BackrestSyncHandler{mgr: host.manager}).handleUnknownPeerPairing(snapshot)(packet)
+	if err != nil {
+		t.Fatalf("authorized client rejected with stale snapshot: %v", err)
+	}
+	if err := authorizeHandshakeAsPeer(packet, peer); err != nil {
+		t.Fatal(err)
+	}
+	current, err := host.configMgr.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(current.Multihost.AuthorizedClients) != 1 {
+		t.Fatalf("authorized clients = %d, want 1", len(current.Multihost.AuthorizedClients))
 	}
 }
 
