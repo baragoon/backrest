@@ -347,6 +347,28 @@ func (c *syncSessionHandlerClient) OnConnectionEstablished(ctx context.Context, 
 	peerState.LastHeartbeat = time.Now()
 	c.mgr.peerStateManager.SetPeerState(peer.Keyid, peerState)
 
+	// Clear the pairing secret from the known host entry now that pairing has succeeded.
+	snapshotHosts := c.syncConfigSnapshot.config.GetMultihost().GetKnownHosts()
+	khIdx := slices.IndexFunc(snapshotHosts, func(kh *v1.Multihost_Peer) bool {
+		return kh.GetKeyid() == peer.GetKeyid()
+	})
+	if khIdx >= 0 && snapshotHosts[khIdx].GetInitialPairingSecret() != "" {
+		if err := c.mgr.configMgr.Transform(func(cfg *v1.Config) (*v1.Config, error) {
+			idx := slices.IndexFunc(cfg.GetMultihost().GetKnownHosts(), func(kh *v1.Multihost_Peer) bool {
+				return kh.GetKeyid() == peer.GetKeyid()
+			})
+			if idx >= 0 {
+				cfg.GetMultihost().GetKnownHosts()[idx].InitialPairingSecret = ""
+			}
+			cfg.Modno++
+			return cfg, nil
+		}); err != nil {
+			c.l.Sugar().Warnf("failed to clear pairing secret after successful pairing: %v", err)
+		} else {
+			c.l.Sugar().Infof("cleared pairing secret for peer %q after successful connection", peer.InstanceId)
+		}
+	}
+
 	// Send a heartbeat every interval to keep the connection alive.
 	go sendHeartbeats(ctx, stream, env.MultihostHeartbeatInterval())
 
@@ -513,6 +535,7 @@ func (c *syncSessionHandlerClient) HandleReceiveResources(ctx context.Context, s
 	return nil
 }
 
+// Note unused: there isn't a situation where the host would send its config for information, the host will only call 'SetConfig' to update the config.
 func (c *syncSessionHandlerClient) HandleReceiveConfig(ctx context.Context, stream *bidiSyncCommandStream, item *v1sync.SyncStreamItem_SyncActionReceiveConfig) error {
 	c.l.Sugar().Debugf("received remote config: %d repos, %d plans, modno=%d",
 		len(item.GetConfig().GetRepos()), len(item.GetConfig().GetPlans()), item.GetConfig().GetModno())
@@ -526,25 +549,6 @@ func (c *syncSessionHandlerClient) HandleReceiveConfig(ctx context.Context, stre
 	}
 	peerState.Config = newRemoteConfig
 	c.mgr.peerStateManager.SetPeerState(c.peer.Keyid, peerState)
-
-	// The server sends its initial config only after it has authorized the client.
-	// Its handshake alone does not confirm that pairing succeeded.
-	secret := c.peer.GetInitialPairingSecret()
-	if secret != "" {
-		if err := c.mgr.configMgr.Transform(func(cfg *v1.Config) (*v1.Config, error) {
-			idx := slices.IndexFunc(cfg.GetMultihost().GetKnownHosts(), func(kh *v1.Multihost_Peer) bool {
-				return kh.GetKeyid() == c.peer.GetKeyid() && kh.GetInitialPairingSecret() == secret
-			})
-			if idx < 0 {
-				return nil, nil
-			}
-			cfg.Multihost.KnownHosts[idx].InitialPairingSecret = ""
-			cfg.Modno++
-			return cfg, nil
-		}); err != nil {
-			c.l.Sugar().Warnf("failed to clear pairing secret after successful pairing: %v", err)
-		}
-	}
 	return nil
 }
 
