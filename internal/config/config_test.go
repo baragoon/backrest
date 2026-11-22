@@ -190,3 +190,43 @@ func TestGetAndSubscribeBuffersConfigChanges(t *testing.T) {
 		t.Fatal("config change was not delivered to subscriber")
 	}
 }
+
+func TestGetAndSubscribeConcurrentUpdate(t *testing.T) {
+	mgr := &ConfigManager{Store: &MemoryStore{Config: NewDefaultConfig()}}
+	updateStarted := make(chan struct{})
+	updateDone := make(chan error, 1)
+	cfg, changes, err := mgr.getAndSubscribe(func() chan struct{} {
+		if mgr.cachedMu.TryLock() {
+			mgr.cachedMu.Unlock()
+			t.Fatal("config update is not excluded between reading and subscribing")
+		}
+		go func() {
+			close(updateStarted)
+			updateDone <- mgr.Transform(func(cfg *v1.Config) (*v1.Config, error) {
+				cfg.Modno++
+				return cfg, nil
+			})
+		}()
+		<-updateStarted
+		return mgr.OnChange.SubscribeWithCapacity(1)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mgr.OnChange.Unsubscribe(changes)
+	if err := <-updateDone; err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-changes:
+	default:
+		t.Fatal("concurrent update after reading was not delivered")
+	}
+	current, err := mgr.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.Modno != cfg.Modno+1 {
+		t.Fatalf("current modno = %d, want %d", current.Modno, cfg.Modno+1)
+	}
+}

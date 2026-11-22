@@ -63,7 +63,7 @@ func (h *BackrestSyncHandler) Sync(ctx context.Context, stream *connect.BidiStre
 			sessionHandler,
 			snapshot.config.GetMultihost().GetAuthorizedClients(),
 			"", // server never sends a pairing secret
-			h.handleUnknownPeerPairing(),
+			h.resolveClientPeer(),
 		)
 		cmdStream.SendErrorAndTerminate(err)
 	}()
@@ -133,7 +133,7 @@ func newSyncHandlerServer(mgr *SyncManager, snapshot *syncConfigSnapshot, mapper
 var _ syncSessionHandler = (*syncSessionHandlerServer)(nil)
 
 func (h *syncSessionHandlerServer) OnConnectionEstablished(ctx context.Context, stream *bidiSyncCommandStream, peer *v1.Multihost_Peer) error {
-	config, configWatchCh, err := h.mgr.configMgr.GetAndSubscribe()
+	_, configWatchCh, err := h.mgr.configMgr.GetAndSubscribe()
 	if err != nil {
 		return NewSyncErrorInternal(fmt.Errorf("getting config for client authorization: %w", err))
 	}
@@ -144,22 +144,9 @@ func (h *syncSessionHandlerServer) OnConnectionEstablished(ctx context.Context, 
 		}
 	}()
 
-	// Verify the peer against the config that will be sent as initial state.
-	authorizedClientPeerIdx := slices.IndexFunc(config.Multihost.GetAuthorizedClients(), func(p *v1.Multihost_Peer) bool {
-		return p.InstanceId == peer.InstanceId && p.Keyid == peer.Keyid
-	})
-	if authorizedClientPeerIdx == -1 {
-		h.l.Sugar().Warnf("rejected a connection from client instance ID %q because it is not authorized", peer.InstanceId)
-		return NewSyncErrorAuth(errors.New("client is not an authorized peer"))
-	}
-
-	h.peer = config.Multihost.AuthorizedClients[authorizedClientPeerIdx]
-	h.l = zap.L().Named(fmt.Sprintf("syncserver handler for peer %q", h.peer.InstanceId))
-
-	h.permissions, err = permissions.NewPermissionSet(h.peer.GetPermissions())
+	err = h.sendInitialState(stream, peer)
 	if err != nil {
-		h.l.Sugar().Warnf("failed to create permission set for client %q: %v", peer.InstanceId, err)
-		return NewSyncErrorInternal(fmt.Errorf("failed to create permission set for client %q: %w", peer.InstanceId, err))
+		return err
 	}
 
 	// Configure the state for the connected peer.
@@ -187,56 +174,33 @@ func (h *syncSessionHandlerServer) OnConnectionEstablished(ctx context.Context, 
 	// start a heartbeat thread
 	go sendHeartbeats(ctx, stream, env.MultihostHeartbeatInterval())
 
-	configRepos, configPlans, err := h.sendConfigToClient(stream, config)
-	if err != nil {
-		return NewSyncErrorInternal(fmt.Errorf("sending initial config to client: %w", err))
-	}
-
-	// Push shared repos to the client
-	sharedRepoCount := h.sendSharedReposToClient(stream, config)
-
-	h.l.Sugar().Infof("sent initial state to client %q: %d repos, %d plans (config); %d shared repos pushed",
-		h.peer.InstanceId, configRepos, configPlans, sharedRepoCount)
-
 	// Process buffered changes only after initial state has been sent to preserve ordering.
 	go func() {
 		defer h.mgr.configMgr.OnChange.Unsubscribe(configWatchCh)
 		for {
 			select {
 			case <-configWatchCh:
-				newConfig, err := h.mgr.configMgr.Get()
-				if err != nil {
-					h.l.Sugar().Warnf("failed to get config on change: %v, disconnecting client", err)
-					stream.SendErrorAndTerminate(nil)
-					return
-				}
+				err := h.mgr.configMgr.WithCurrent(func(newConfig *v1.Config) error {
+					peerIdx := slices.IndexFunc(newConfig.GetMultihost().GetAuthorizedClients(), func(p *v1.Multihost_Peer) bool {
+						return p.InstanceId == h.peer.InstanceId && p.Keyid == h.peer.Keyid
+					})
+					if peerIdx == -1 || !proto.Equal(h.peer, newConfig.Multihost.AuthorizedClients[peerIdx]) {
+						return NewSyncErrorAuth(errors.New("client authorization changed"))
+					}
 
-				// Check if this peer is still authorized.
-				peerIdx := slices.IndexFunc(newConfig.Multihost.GetAuthorizedClients(), func(p *v1.Multihost_Peer) bool {
-					return p.InstanceId == h.peer.InstanceId && p.Keyid == h.peer.Keyid
-				})
-				if peerIdx == -1 {
-					h.l.Sugar().Infof("disconnecting client %q: no longer authorized", h.peer.InstanceId)
-					stream.SendErrorAndTerminate(nil)
-					return
-				}
-
-				// Disconnect if the peer's permissions changed.
-				updatedPeer := newConfig.Multihost.AuthorizedClients[peerIdx]
-				if !proto.Equal(h.peer, updatedPeer) {
-					h.l.Sugar().Infof("disconnecting client %q: peer configuration changed", h.peer.InstanceId)
-					stream.SendErrorAndTerminate(nil)
-					return
-				}
-
-				// Permissions are unchanged; send updated config and shared repos.
-				configRepos, configPlans, err := h.sendConfigToClient(stream, newConfig)
-				if err != nil {
-					h.l.Sugar().Warnf("failed to send updated config to client %q: %v", h.peer.InstanceId, err)
-				} else {
+					configRepos, configPlans, err := h.sendConfigToClient(stream, newConfig)
+					if err != nil {
+						return fmt.Errorf("sending updated config: %w", err)
+					}
 					sharedRepos := h.sendSharedReposToClient(stream, newConfig)
 					h.l.Sugar().Debugf("config changed, sent update to client %q: %d repos, %d plans (config); %d shared repos pushed",
 						h.peer.InstanceId, configRepos, configPlans, sharedRepos)
+					return nil
+				})
+				if err != nil {
+					h.l.Sugar().Warnf("failed to update client %q after config change: %v, disconnecting", h.peer.InstanceId, err)
+					stream.SendErrorAndTerminate(nil)
+					return
 				}
 			case <-ctx.Done():
 				return
@@ -245,6 +209,40 @@ func (h *syncSessionHandlerServer) OnConnectionEstablished(ctx context.Context, 
 	}()
 	watchingConfig = true
 
+	return nil
+}
+
+func (h *syncSessionHandlerServer) sendInitialState(stream *bidiSyncCommandStream, peer *v1.Multihost_Peer) error {
+	err := h.mgr.configMgr.WithCurrent(func(config *v1.Config) error {
+		idx := slices.IndexFunc(config.GetMultihost().GetAuthorizedClients(), func(p *v1.Multihost_Peer) bool {
+			return p.InstanceId == peer.InstanceId && p.Keyid == peer.Keyid
+		})
+		if idx == -1 {
+			return NewSyncErrorAuth(errors.New("client is not an authorized peer"))
+		}
+		h.peer = config.Multihost.AuthorizedClients[idx]
+		h.l = zap.L().Named(fmt.Sprintf("syncserver handler for peer %q", h.peer.InstanceId))
+		var err error
+		h.permissions, err = permissions.NewPermissionSet(h.peer.GetPermissions())
+		if err != nil {
+			return NewSyncErrorInternal(fmt.Errorf("creating permission set for client %q: %w", peer.InstanceId, err))
+		}
+		configRepos, configPlans, err := h.sendConfigToClient(stream, config)
+		if err != nil {
+			return NewSyncErrorInternal(fmt.Errorf("sending initial config to client: %w", err))
+		}
+		sharedRepoCount := h.sendSharedReposToClient(stream, config)
+		h.l.Sugar().Infof("sent initial state to client %q: %d repos, %d plans (config); %d shared repos pushed",
+			h.peer.InstanceId, configRepos, configPlans, sharedRepoCount)
+		return nil
+	})
+	if err != nil {
+		var syncErr *SyncError
+		if errors.As(err, &syncErr) {
+			return err
+		}
+		return NewSyncErrorInternal(fmt.Errorf("getting config for client authorization: %w", err))
+	}
 	return nil
 }
 
@@ -455,7 +453,7 @@ func ValidatePairingSecret(secret string, tokens []*v1.Multihost_PairingToken, n
 	return nil, fmt.Errorf("no matching pairing token found")
 }
 
-// handleUnknownPeerPairing returns an onUnknownPeerFunc that validates a pairing secret
+// resolveClientPeer returns a resolver that validates a pairing secret
 // from the handshake and adds new clients to authorized_clients. It also
 // recognizes peers that were authorized after the request-time snapshot.
 //
@@ -463,7 +461,7 @@ func ValidatePairingSecret(secret string, tokens []*v1.Multihost_PairingToken, n
 // transcript before invoking this callback, so signature validity (and
 // therefore the client's possession of the private key) is established by
 // the time we get here.
-func (h *BackrestSyncHandler) handleUnknownPeerPairing() onUnknownPeerFunc {
+func (h *BackrestSyncHandler) resolveClientPeer() resolvePeerFunc {
 	return func(handshake *v1sync.SyncStreamItem) (*v1.Multihost_Peer, error) {
 		pairingSecret := handshake.GetHandshake().GetPairingSecret()
 		peerKeyID := handshake.GetHandshake().GetPublicKey().GetKeyid()

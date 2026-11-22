@@ -3,16 +3,19 @@ package syncapi
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync"
 	"testing"
 	"time"
 
 	v1 "github.com/baragoon/backrest/gen/go/v1"
 	"github.com/baragoon/backrest/gen/go/v1sync"
+	"github.com/baragoon/backrest/internal/config"
 	"github.com/baragoon/backrest/internal/config/migrations"
 	"github.com/baragoon/backrest/internal/cryptoutil"
 	"github.com/baragoon/backrest/internal/testutil"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -311,6 +314,7 @@ func TestPairingWithStaleServerSnapshot(t *testing.T) {
 	}
 	authorizedPeer := &v1.Multihost_Peer{
 		Keyid: identity2.Keyid, InstanceId: defaultClientID,
+		Permissions: []*v1.Multihost_Permission{{Type: v1.Multihost_Permission_PERMISSION_READ_CONFIG}},
 	}
 	if err := host.configMgr.Transform(func(cfg *v1.Config) (*v1.Config, error) {
 		cfg.Multihost.AuthorizedClients = append(cfg.Multihost.AuthorizedClients, authorizedPeer)
@@ -326,7 +330,7 @@ func TestPairingWithStaleServerSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pairing := (&BackrestSyncHandler{mgr: host.manager}).handleUnknownPeerPairing()
+	pairing := (&BackrestSyncHandler{mgr: host.manager}).resolveClientPeer()
 	peer, err := pairing(packet)
 	if err != nil {
 		t.Fatalf("authorized client rejected with stale snapshot: %v", err)
@@ -409,6 +413,211 @@ func TestServerUsesCurrentConfigForInitialState(t *testing.T) {
 	if len(initialConfig.GetRepos()) != 1 || initialConfig.GetRepos()[0].GetPassword() != "current-password" {
 		t.Fatalf("initial config = %v, want the current repository config", initialConfig)
 	}
+}
+
+func TestServerInitialStateRevalidatesAuthorization(t *testing.T) {
+	for _, revoked := range []bool{true, false} {
+		t.Run(fmt.Sprintf("revoked=%t", revoked), func(t *testing.T) {
+			peer := &v1.Multihost_Peer{
+				Keyid: identity2.Keyid, InstanceId: defaultClientID,
+				Permissions: []*v1.Multihost_Permission{
+					{Type: v1.Multihost_Permission_PERMISSION_READ_CONFIG, Scopes: []string{"repo:" + defaultRepoID}},
+					{Type: v1.Multihost_Permission_PERMISSION_RECEIVE_SHARED_REPOS},
+				},
+			}
+			host := newPeerUnderTest(t, &v1.Config{
+				Version:  migrations.CurrentVersion,
+				Instance: defaultHostID,
+				Repos: []*v1.Repo{{
+					Id: defaultRepoID, Guid: defaultRepoGUID, Uri: "test-uri", Password: "secret", Shared: true,
+				}},
+				Multihost: &v1.Multihost{Identity: identity1, AuthorizedClients: []*v1.Multihost_Peer{peer}},
+			})
+			snapshot, changes, err := host.configMgr.GetAndSubscribe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer host.configMgr.OnChange.Unsubscribe(changes)
+			if err := host.configMgr.Transform(func(cfg *v1.Config) (*v1.Config, error) {
+				if revoked {
+					cfg.Multihost.AuthorizedClients = nil
+				} else {
+					cfg.Multihost.AuthorizedClients[0].Permissions = nil
+				}
+				return cfg, nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			handler := newSyncHandlerServer(host.manager, &syncConfigSnapshot{config: snapshot}, nil)
+			stream := newBidiSyncCommandStream()
+			err = handler.sendInitialState(stream, peer)
+			if revoked {
+				if err == nil {
+					t.Fatal("revoked peer was accepted")
+				}
+				if len(stream.sendChan) != 0 {
+					t.Fatal("sent initial state to revoked peer")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			initial := (<-stream.sendChan).GetReceiveConfig().GetConfig()
+			if len(initial.GetRepos()) != 0 {
+				t.Fatal("sent repository credentials after permission was removed")
+			}
+			<-stream.sendChan // resource list
+			select {
+			case item := <-stream.sendChan:
+				t.Fatalf("sent shared repository after permission was removed: %v", item)
+			default:
+			}
+		})
+	}
+}
+
+func TestServerHandshakeUsesCurrentPeerIdentity(t *testing.T) {
+	host := newPeerUnderTest(t, &v1.Config{
+		Version:  migrations.CurrentVersion,
+		Instance: defaultHostID,
+		Multihost: &v1.Multihost{Identity: identity1, AuthorizedClients: []*v1.Multihost_Peer{{
+			Keyid: identity2.Keyid, InstanceId: "old-client",
+		}}},
+	})
+	stale, err := host.configMgr.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := host.configMgr.Transform(func(cfg *v1.Config) (*v1.Config, error) {
+		cfg.Multihost.AuthorizedClients[0].InstanceId = defaultClientID
+		return cfg, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	localKey, err := cryptoutil.NewPrivateKey(identity1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remoteKey, err := cryptoutil.NewPrivateKey(identity2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transcript := freshTranscript(t)
+	packet, err := createHandshakePacket(defaultClientID, remoteKey, "", transcript)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldPacket, err := createHandshakePacket("old-client", remoteKey, "", transcript)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&BackrestSyncHandler{mgr: host.manager}).resolveClientPeer()(oldPacket); err == nil {
+		t.Fatal("old instance ID was accepted after authorization changed")
+	}
+	stream := newBidiSyncCommandStream()
+	stream.transcript = transcript
+	close(stream.transcriptReady)
+	stream.recvChan <- packet
+	handler := newSyncHandlerServer(host.manager, &syncConfigSnapshot{config: stale}, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- runSync(ctx, defaultHostID, localKey, stream, handler,
+			stale.Multihost.AuthorizedClients, "", (&BackrestSyncHandler{mgr: host.manager}).resolveClientPeer())
+	}()
+	defer func() {
+		cancel()
+		<-done
+	}()
+	select {
+	case <-stream.sendChan: // local handshake
+	case err := <-done:
+		done <- err
+		t.Fatalf("sync failed before local handshake: %v", err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	select {
+	case item := <-stream.sendChan:
+		if item.GetReceiveConfig() == nil {
+			t.Fatalf("expected initial config, got %v", item)
+		}
+	case err := <-done:
+		done <- err
+		t.Fatalf("current peer identity rejected: %v", err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+}
+
+func TestSyncManagerAppliesSecretClearedDuringRestart(t *testing.T) {
+	mgrConfig := &config.ConfigManager{Store: &config.MemoryStore{Config: &v1.Config{
+		Version:  migrations.CurrentVersion,
+		Instance: defaultClientID,
+		Multihost: &v1.Multihost{Identity: identity2, KnownHosts: []*v1.Multihost_Peer{{
+			Keyid: identity1.Keyid, InstanceId: defaultHostID,
+			InstanceUrl: "http://127.0.0.1:1", InitialPairingSecret: "reusable-secret",
+		}}},
+	}}}
+	mgr := NewSyncManager(mgrConfig, nil, nil, NewInMemoryPeerStateManager())
+	blocked, release := make(chan struct{}), make(chan struct{})
+	var blockOnce, releaseOnce sync.Once
+	logger := zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()), zapcore.AddSync(io.Discard), zapcore.InfoLevel),
+		zap.Hooks(func(entry zapcore.Entry) error {
+			if entry.Message == "syncmanager applying new config, waiting for existing sync goroutines to exit" {
+				blockOnce.Do(func() {
+					close(blocked)
+					<-release
+				})
+			}
+			return nil
+		}))
+	restore := zap.ReplaceGlobals(logger)
+	defer restore()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		mgr.RunSync(ctx)
+	}()
+	defer func() {
+		releaseOnce.Do(func() { close(release) })
+		cancel()
+		<-done
+	}()
+	testutil.Try(t, ctx, func() error {
+		if mgr.getSyncConfigSnapshot() == nil {
+			return fmt.Errorf("waiting for initial snapshot")
+		}
+		return nil
+	})
+	if err := mgrConfig.Transform(func(cfg *v1.Config) (*v1.Config, error) {
+		cfg.Multihost.KnownHosts[0].InstanceUrl = "http://127.0.0.1:2"
+		return cfg, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-blocked:
+	case <-ctx.Done():
+		t.Fatal("sync manager did not start processing the config change")
+	}
+	if err := mgrConfig.Transform(func(cfg *v1.Config) (*v1.Config, error) {
+		cfg.Multihost.KnownHosts[0].InitialPairingSecret = ""
+		return cfg, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	releaseOnce.Do(func() { close(release) })
+	testutil.Try(t, ctx, func() error {
+		snapshot := mgr.getSyncConfigSnapshot()
+		if snapshot == nil || snapshot.config.Multihost.KnownHosts[0].InitialPairingSecret != "" {
+			return fmt.Errorf("sync manager has not applied the cleared pairing secret")
+		}
+		return nil
+	})
 }
 
 func TestPairingTokenExpiredRejected(t *testing.T) {

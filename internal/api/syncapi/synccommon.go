@@ -16,11 +16,10 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
-// onUnknownPeerFunc is called when a peer is not found in the known peers list during handshake.
-// It receives the handshake item and may return a peer definition to authorize the connection
-// (e.g. by validating a pairing token and adding the peer to the config).
+// resolvePeerFunc returns the current peer definition for a verified handshake,
+// potentially validating a pairing token and adding the peer to the config.
 // If it returns nil, the connection is rejected.
-type onUnknownPeerFunc func(handshake *v1sync.SyncStreamItem) (*v1.Multihost_Peer, error)
+type resolvePeerFunc func(handshake *v1sync.SyncStreamItem) (*v1.Multihost_Peer, error)
 
 func runSync(
 	ctx context.Context,
@@ -28,9 +27,9 @@ func runSync(
 	localKey *cryptoutil.PrivateKey,
 	commandStream *bidiSyncCommandStream,
 	handler syncSessionHandler,
-	knownPeers []*v1.Multihost_Peer, // could be known hosts or authorized clients, doesn't matter. This is used to verify the handshake packet, authorization comes later.
+	knownPeers []*v1.Multihost_Peer, // Used to verify the handshake when resolvePeer is nil.
 	pairingSecret string, // optional one-time pairing secret to send during the handshake
-	onUnknownPeer onUnknownPeerFunc, // optional callback for handling unknown peers (e.g. pairing), nil to reject all unknown peers
+	resolvePeer resolvePeerFunc, // optional current-config resolver, otherwise use knownPeers
 ) error {
 	// Session-scoped context: cancelled when this runSync invocation returns. Any per-session
 	// goroutines the handler spawns (heartbeats, watchers, etc.) should use this ctx so they
@@ -66,18 +65,18 @@ func runSync(
 		return NewSyncErrorAuth(fmt.Errorf("verifying handshake packet: %w", err))
 	}
 
-	// Find the peer definition in the known peers list.
 	var peer *v1.Multihost_Peer
-	peerIdx := slices.IndexFunc(knownPeers, func(p *v1.Multihost_Peer) bool {
-		return p.Keyid == handshake.GetHandshake().GetPublicKey().GetKeyid()
-	})
-	if peerIdx >= 0 {
-		peer = knownPeers[peerIdx]
-	} else if onUnknownPeer != nil {
-		// Peer not in known list — try the onUnknownPeer callback (e.g. pairing token validation).
-		peer, err = onUnknownPeer(handshake)
+	if resolvePeer != nil {
+		peer, err = resolvePeer(handshake)
 		if err != nil {
-			return NewSyncErrorAuth(fmt.Errorf("pairing failed: %w", err))
+			return NewSyncErrorAuth(fmt.Errorf("resolving peer: %w", err))
+		}
+	} else {
+		peerIdx := slices.IndexFunc(knownPeers, func(p *v1.Multihost_Peer) bool {
+			return p.Keyid == handshake.GetHandshake().GetPublicKey().GetKeyid()
+		})
+		if peerIdx >= 0 {
+			peer = knownPeers[peerIdx]
 		}
 	}
 	if peer == nil {
