@@ -65,6 +65,19 @@ func (m *ConfigManager) Get() (*v1.Config, error) {
 	return m.getCachedLocked()
 }
 
+// GetAndSubscribe returns the current config and a buffered change channel
+// without allowing an update to occur between reading and subscribing.
+func (m *ConfigManager) GetAndSubscribe() (*v1.Config, chan struct{}, error) {
+	m.cachedMu.Lock()
+	defer m.cachedMu.Unlock()
+
+	config, err := m.getCachedLocked()
+	if err != nil {
+		return nil, nil, err
+	}
+	return config, m.OnChange.SubscribeWithCapacity(1), nil
+}
+
 // getCachedLocked returns the cached config, loading from the store if necessary.
 // Must be called with cachedMu held.
 func (m *ConfigManager) getCachedLocked() (*v1.Config, error) {

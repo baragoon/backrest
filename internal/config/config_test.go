@@ -166,3 +166,27 @@ func TestConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestGetAndSubscribeBuffersConfigChanges(t *testing.T) {
+	mgr := &ConfigManager{
+		Store: &MemoryStore{Config: NewDefaultConfig()},
+	}
+	_, changes, err := mgr.GetAndSubscribe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mgr.OnChange.Unsubscribe(changes)
+
+	if err := mgr.Transform(func(cfg *v1.Config) (*v1.Config, error) {
+		cfg.Modno++
+		return cfg, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-changes:
+	default:
+		t.Fatal("config change was not delivered to subscriber")
+	}
+}
