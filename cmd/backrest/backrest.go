@@ -234,10 +234,25 @@ func writeHealthBindAddress(address string) error {
 	if !enabled {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("creating healthcheck bind address directory: %w", err)
 	}
-	if err := os.WriteFile(path, []byte(address), 0644); err != nil {
+
+	// Keep the existing creation mode and let the umask apply.
+	tmp, err := os.OpenFile(filepath.Join(dir, ".backrest-health-"+rand.Text()), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if err != nil {
+		return fmt.Errorf("writing healthcheck bind address: %w", err)
+	}
+	_, err = tmp.WriteString(address)
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
+		_ = os.Remove(tmp.Name())
 		return fmt.Errorf("writing healthcheck bind address: %w", err)
 	}
 	return nil

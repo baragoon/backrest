@@ -1,12 +1,15 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -73,5 +76,62 @@ func TestHealthBindAddressFileUsesTMPDIR(t *testing.T) {
 	}
 	if got := string(data); got != address {
 		t.Fatalf("saved bind address = %q, want %q", got, address)
+	}
+}
+
+func TestWriteHealthBindAddressReplacesSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	path := filepath.Join(dir, "bind-address")
+	t.Setenv("BACKREST_HEALTH_BIND_ADDRESS_FILE", path)
+
+	if err := os.WriteFile(target, []byte("unchanged"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, path); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("creating symlink requires Windows privileges: %v", err)
+		}
+		t.Fatal(err)
+	}
+
+	const address = "127.0.0.1:1234"
+	if err := writeHealthBindAddress(address); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Mode().IsRegular() {
+		t.Fatalf("metadata path is not a regular file: %v", info.Mode())
+	}
+	if got, err := healthBindAddress(); err != nil || got != address {
+		t.Fatalf("healthBindAddress() = %q, %v; want %q", got, err, address)
+	}
+	if got, err := os.ReadFile(target); err != nil || string(got) != "unchanged" {
+		t.Fatalf("symlink target contents = %q, %v; want unchanged", got, err)
+	}
+}
+
+func TestWriteHealthBindAddressCleansUpAfterRenameFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bind-address")
+	t.Setenv("BACKREST_HEALTH_BIND_ADDRESS_FILE", path)
+	if err := os.Mkdir(path, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	err := writeHealthBindAddress("127.0.0.1:1234")
+	var renameErr *os.LinkError
+	if !errors.As(err, &renameErr) || !strings.HasPrefix(err.Error(), "writing healthcheck bind address: ") {
+		t.Fatalf("writeHealthBindAddress() = %v; want wrapped rename error", err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != filepath.Base(path) || !entries[0].IsDir() {
+		t.Fatalf("expected only the original directory, got %v", entries)
 	}
 }
