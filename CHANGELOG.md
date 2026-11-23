@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.16.3](https://github.com/baragoon/backrest/compare/v1.16.2...v1.16.3) (2026-11-23)
+
+
+### Bug Fixes
+
+* **deps:** remove unused dependencies ([6cfcc86](https://github.com/baragoon/backrest/commit/6cfcc86223f2fca6fda3b6f525c1eddafda6d9ce))
+* **deps:** remove unused dependencies ([4e7b300](https://github.com/baragoon/backrest/commit/4e7b30011f206e9c8c3e2b02f38bd03a214c4bc1))
+
 ## [1.16.2](https://github.com/baragoon/backrest/compare/v1.16.1...v1.16.2) (2026-11-22)
 
 
