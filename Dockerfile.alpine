@@ -17,5 +17,9 @@ RUN /backrest --install-deps-only
 # Setup path for restic
 RUN mkdir -p /bin && mv /root/.local/share/backrest/restic /bin/restic
 
+ENV BACKREST_HEALTHCHECK=1
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5m --retries=3 CMD ["/backrest", "health"]
+
 ENTRYPOINT ["/sbin/tini", "--", "/docker-entrypoint"]
 CMD ["/backrest"]

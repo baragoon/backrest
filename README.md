@@ -196,8 +196,18 @@ Download the Windows installer for your architecture from the [releases page](ht
 | `BACKREST_RESTIC_COMMAND` | Path to restic binary       | Defaults to a Backrest managed version of restic in `C:\Program Files\restic\restic-x.x.x` |
 | `XDG_CACHE_HOME`          | Path to the cache directory |                                                                                            |
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:e592cb18e59f910199df5f4752813bf29a7358024ee334dd3b3b1f5a58604f69 -->
+
+## Healthcheck address file locking
+
+Backrest stores healthcheck locks in a private subdirectory of its data directory on Linux and macOS, and in the user profile on Windows. Set `BACKREST_HEALTH_BIND_ADDRESS_LOCK_FILE` to use an existing operator controlled directory instead. If server processes from different accounts or with different data directories share an explicit `BACKREST_HEALTH_BIND_ADDRESS_FILE`, configure them with the same lock path and give each account read and write access to the regular lock file.
+
 # Development
 
+
+<!-- /coderabbit-ai-generated:v1 -->
 ## Contributing
 
 Contributions are welcome! See the [issues](https://github.com/baragoon/backrest/issues) or feel free to open a new issue to discuss a project. Beyond the core codebase, contributions to [documentation](https://garethgeorge.github.io/backrest/introduction/getting-started), [cookbooks](https://garethgeorge.github.io/backrest/cookbooks/command-hook-examples), and testing are always welcome.

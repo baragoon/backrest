@@ -12,6 +12,10 @@ var linuxTray = flag.Bool("tray", false, "run with system tray applet")
 
 func main() {
 	flag.Parse()
+	if isHealthCommand() {
+		runApp()
+		return
+	}
 	if *linuxTray {
 		startTray()
 	} else {

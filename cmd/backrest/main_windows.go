@@ -12,6 +12,10 @@ var windowsTray = flag.Bool("windows-tray", true, "run the windows tray applicat
 
 func main() {
 	flag.Parse()
+	if isHealthCommand() {
+		runApp()
+		return
+	}
 	if *windowsTray {
 		startTray()
 	} else {

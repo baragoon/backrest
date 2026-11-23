@@ -14,6 +14,10 @@ var darwinTray = flag.Bool("tray", false, "run with system tray applet (menu bar
 
 func main() {
 	flag.Parse()
+	if isHealthCommand() {
+		runApp()
+		return
+	}
 	// Auto-enable tray mode when launched from a .app bundle
 	inBundle := strings.Contains(os.Args[0], ".app/Contents/MacOS/")
 	if *darwinTray || inBundle {
