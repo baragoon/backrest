@@ -5,9 +5,11 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -15,6 +17,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -37,6 +40,7 @@ import (
 	"github.com/baragoon/backrest/internal/orchestrator"
 	"github.com/baragoon/backrest/internal/resticinstaller"
 	"github.com/baragoon/backrest/webui"
+	"github.com/gofrs/flock"
 	"github.com/mattn/go-colorable"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -51,16 +55,35 @@ var printVersion = flag.Bool("version", false, "print version and exit")
 var (
 	version = "unknown"
 	commit  = "unknown"
+
+	healthBindAddressMu sync.Mutex
 )
+
+const (
+	healthCheckPath                 = "/healthz"
+	healthCheckResponse             = "backrest"
+	healthBindAddressFileNamePrefix = "backrest-health-bind-address-"
+	healthBindAddressLockTimeout    = 2 * time.Second
+)
+
+type healthBindAddressMetadata struct {
+	PID     uint32 `json:"pid"`
+	StartID string `json:"start_id"`
+	Address string `json:"address"`
+}
 
 // onOpLogReady, when set, is invoked with the OpLog once it is constructed.
 // The tray build (-tags tray) uses it to drive a status-reflecting menu bar
 // icon. It stays nil in non-tray builds, so this adds no behavior there.
 var onOpLogReady func(*oplog.OpLog)
 
+func isHealthCommand() bool {
+	return len(flag.Args()) > 0 && flag.Arg(0) == "health"
+}
+
 func runApp() {
 	flag.Parse()
-	if len(flag.Args()) > 0 && flag.Arg(0) == "health" {
+	if isHealthCommand() {
 		address, err := healthBindAddress()
 		if err == nil {
 			err = checkHealth(address)
@@ -106,9 +129,6 @@ func runApp() {
 		zap.L().Fatal("error creating oplog", zap.Error(err))
 	}
 	defer opLogStore.Close()
-	if err := writeHealthBindAddress(bindAddress); err != nil {
-		zap.L().Fatal("error recording healthcheck bind address", zap.Error(err))
-	}
 
 	// onOpLogReady lets the system tray (when built with -tags tray) observe
 	// operation status in-process to reflect backup state in its icon. It is
@@ -167,7 +187,18 @@ func runApp() {
 	}()
 
 	zap.L().Info("starting web server", zap.String("addr", server.Addr))
-	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+	listener, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		zap.L().Fatal("error starting server", zap.Error(err))
+		return
+	}
+	actualAddress := listener.Addr().String()
+	if err := writeHealthBindAddress(actualAddress); err != nil {
+		zap.L().Warn("error recording healthcheck bind address", zap.Error(err))
+	} else {
+		defer removeHealthBindAddress(actualAddress)
+	}
+	if err := server.Serve(listener); !errors.Is(err, http.ErrServerClosed) {
 		zap.L().Error("error starting server", zap.Error(err))
 	}
 	zap.L().Info("HTTP gateway shutdown")
@@ -176,9 +207,39 @@ func runApp() {
 }
 
 func checkHealth(address string) error {
+	probeURL, err := healthProbeURL(address)
+	if err != nil {
+		return err
+	}
+	client := http.Client{
+		Timeout:   2 * time.Second,
+		Transport: &http.Transport{Proxy: nil},
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	response, err := client.Get(probeURL.String())
+	if err != nil {
+		return fmt.Errorf("Backrest healthcheck failed: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("Backrest healthcheck failed: HTTP status %s", response.Status)
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, int64(len(healthCheckResponse)+1)))
+	if err != nil {
+		return fmt.Errorf("reading Backrest healthcheck response: %w", err)
+	}
+	if string(body) != healthCheckResponse {
+		return fmt.Errorf("Backrest healthcheck failed: unexpected response body %q", body)
+	}
+	return nil
+}
+
+func healthProbeURL(address string) (*url.URL, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
-		return fmt.Errorf("invalid Backrest bind address %q: %w", address, err)
+		return nil, fmt.Errorf("invalid Backrest bind address %q: %w", address, err)
 	}
 	switch host {
 	case "", "0.0.0.0":
@@ -190,49 +251,116 @@ func checkHealth(address string) error {
 	probeURL := url.URL{
 		Scheme: "http",
 		Host:   net.JoinHostPort(host, port),
-		Path:   "/",
+		Path:   healthCheckPath,
 	}
-	client := http.Client{
-		Timeout:   2 * time.Second,
-		Transport: &http.Transport{Proxy: nil},
-	}
-	response, err := client.Get(probeURL.String())
-	if err != nil {
-		return fmt.Errorf("Backrest healthcheck failed: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("Backrest healthcheck failed: HTTP status %s", response.Status)
-	}
-	return nil
+	return &probeURL, nil
 }
 
 func healthBindAddress() (string, error) {
 	if bindAddressFlag := flag.Lookup("bind-address"); bindAddressFlag != nil && bindAddressFlag.Value.String() != "" {
 		return env.BindAddress(), nil
 	}
-	path, enabled := healthBindAddressFile()
-	if !enabled {
+	if path := os.Getenv("BACKREST_HEALTH_BIND_ADDRESS_FILE"); path != "" {
+		address, active, err := readHealthBindAddress(path, 0)
+		if err != nil {
+			return "", err
+		}
+		if active {
+			return address, nil
+		}
 		return env.BindAddress(), nil
 	}
-	data, err := os.ReadFile(path)
+	if os.Getenv("BACKREST_HEALTHCHECK") != "1" {
+		return env.BindAddress(), nil
+	}
+
+	tempDir := healthTempDir()
+	entries, err := os.ReadDir(tempDir)
 	if errors.Is(err, os.ErrNotExist) {
 		return env.BindAddress(), nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("reading healthcheck bind address: %w", err)
+		return "", fmt.Errorf("reading healthcheck bind address directory: %w", err)
 	}
-	address := strings.TrimSpace(string(data))
-	if address == "" {
-		return "", fmt.Errorf("healthcheck bind address file %q is empty", path)
+	var paths []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasPrefix(name, healthBindAddressFileNamePrefix) || !entry.Type().IsRegular() {
+			continue
+		}
+		pidText, _, ok := strings.Cut(strings.TrimPrefix(name, healthBindAddressFileNamePrefix), "-")
+		if !ok {
+			continue
+		}
+		pid, err := strconv.ParseUint(pidText, 10, 64)
+		if err != nil || !healthPIDInRange(pid) {
+			continue
+		}
+		address, active, err := readHealthBindAddress(filepath.Join(tempDir, name), uint32(pid))
+		if err != nil {
+			return "", fmt.Errorf("checking healthcheck process %d: %w", pid, err)
+		}
+		if active {
+			paths = append(paths, address)
+		}
 	}
-	return address, nil
+	if len(paths) == 0 {
+		return env.BindAddress(), nil
+	}
+	if len(paths) > 1 {
+		return "", fmt.Errorf("multiple Backrest health address files found; set BACKREST_HEALTH_BIND_ADDRESS_FILE or --bind-address")
+	}
+	return paths[0], nil
+}
+
+func readHealthBindAddress(path string, expectedPID uint32) (string, bool, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("reading healthcheck bind address: %w", err)
+	}
+	var metadata healthBindAddressMetadata
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return "", false, fmt.Errorf("decoding healthcheck bind address: %w", err)
+	}
+	if !healthPIDInRange(uint64(metadata.PID)) || metadata.StartID == "" || metadata.Address == "" {
+		return "", false, fmt.Errorf("invalid healthcheck bind address metadata in %q", path)
+	}
+	if expectedPID != 0 && metadata.PID != expectedPID {
+		return "", false, nil
+	}
+	startID, running, err := healthProcessIdentity(metadata.PID)
+	if err != nil {
+		return "", false, fmt.Errorf("checking healthcheck process %d: %w", metadata.PID, err)
+	}
+	if !running || startID != metadata.StartID {
+		return "", false, nil
+	}
+	return metadata.Address, true, nil
 }
 
 func writeHealthBindAddress(address string) error {
-	path, enabled := healthBindAddressFile()
+	pid := uint32(os.Getpid())
+	path, enabled := healthBindAddressFile(pid, address)
 	if !enabled {
 		return nil
+	}
+	startID, running, err := healthProcessIdentity(pid)
+	if err != nil {
+		return fmt.Errorf("getting healthcheck process start identifier: %w", err)
+	}
+	if !running || startID == "" {
+		return fmt.Errorf("getting healthcheck process start identifier: process %d is not running", pid)
+	}
+	data, err := json.Marshal(healthBindAddressMetadata{
+		PID:     pid,
+		StartID: startID,
+		Address: address,
+	})
+	if err != nil {
+		return fmt.Errorf("encoding healthcheck bind address: %w", err)
 	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -244,12 +372,14 @@ func writeHealthBindAddress(address string) error {
 	if err != nil {
 		return fmt.Errorf("writing healthcheck bind address: %w", err)
 	}
-	_, err = tmp.WriteString(address)
+	_, err = tmp.Write(data)
 	if closeErr := tmp.Close(); err == nil {
 		err = closeErr
 	}
 	if err == nil {
-		err = os.Rename(tmp.Name(), path)
+		err = withHealthBindAddressLock(path, func() error {
+			return os.Rename(tmp.Name(), path)
+		})
 	}
 	if err != nil {
 		_ = os.Remove(tmp.Name())
@@ -258,7 +388,7 @@ func writeHealthBindAddress(address string) error {
 	return nil
 }
 
-func healthBindAddressFile() (string, bool) {
+func healthBindAddressFile(pid uint32, address string) (string, bool) {
 	if path := os.Getenv("BACKREST_HEALTH_BIND_ADDRESS_FILE"); path != "" {
 		return path, true
 	}
@@ -269,7 +399,60 @@ func healthBindAddressFile() (string, bool) {
 	if tempDir == "" {
 		tempDir = "/tmp"
 	}
-	return filepath.Join(tempDir, "backrest-health-bind-address"), true
+	hash := sha256.Sum256([]byte(address))
+	name := fmt.Sprintf("%s%d-%s", healthBindAddressFileNamePrefix, pid, hex.EncodeToString(hash[:]))
+	return filepath.Join(tempDir, name), true
+}
+
+func healthTempDir() string {
+	if tempDir := os.Getenv("TMPDIR"); tempDir != "" {
+		return tempDir
+	}
+	return "/tmp"
+}
+
+func removeHealthBindAddress(address string) {
+	pid := uint32(os.Getpid())
+	path, enabled := healthBindAddressFile(pid, address)
+	if !enabled {
+		return
+	}
+	err := withHealthBindAddressLock(path, func() error {
+		currentAddress, owned, err := readHealthBindAddress(path, pid)
+		if err != nil {
+			return err
+		}
+		if !owned || currentAddress != address {
+			return nil
+		}
+		return os.Remove(path)
+	})
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		zap.L().Warn("error removing healthcheck bind address", zap.Error(err))
+	}
+}
+
+func withHealthBindAddressLock(path string, fn func() error) (err error) {
+	healthBindAddressMu.Lock()
+	defer healthBindAddressMu.Unlock()
+
+	lockPath := filepath.Join(filepath.Dir(path), ".backrest-health-bind-address.lock")
+	lock := flock.New(lockPath, flock.SetPermissions(0666))
+	ctx, cancel := context.WithTimeout(context.Background(), healthBindAddressLockTimeout)
+	defer cancel()
+	locked, err := lock.TryLockContext(ctx, 10*time.Millisecond)
+	if err != nil {
+		return fmt.Errorf("locking healthcheck bind address: %w", err)
+	}
+	if !locked {
+		return fmt.Errorf("locking healthcheck bind address: timed out")
+	}
+	defer func() {
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			err = errors.Join(err, fmt.Errorf("unlocking healthcheck bind address: %w", unlockErr))
+		}
+	}()
+	return fn()
 }
 
 func createConfigStore() config.ConfigStore {
@@ -402,6 +585,7 @@ func newRootMux(
 
 	// Root mux to dispatch to authenticated or unauthenticated handlers
 	rootMux := http.NewServeMux()
+	rootMux.HandleFunc(healthCheckPath, backrestHealthHandler)
 
 	// Create a fall through handler which tries the muxes in order to find one to handle the route.
 	rootMux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -424,6 +608,16 @@ func newRootMux(
 	}))
 
 	return rootMux
+}
+
+func backrestHealthHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = io.WriteString(w, healthCheckResponse)
 }
 
 func newCorsMiddleware(h http.Handler) http.Handler {
