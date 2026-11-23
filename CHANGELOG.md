@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.17.0](https://github.com/baragoon/backrest/compare/v1.16.3...v1.17.0) (2026-11-23)
+
+
+### Features
+
+* **healthcheck:** add health check functionality and tests ([090e3f7](https://github.com/baragoon/backrest/commit/090e3f7e721a9897f5e0a6e9a79f3b1f4cd22784))
+* **healthcheck:** add health check functionality and tests ([f8a1b85](https://github.com/baragoon/backrest/commit/f8a1b85cc512a61b2edf0abad668d277abcf5f27))
+* **healthcheck:** enhance health check functionality and add platform-specific process handling ([dfd5ebe](https://github.com/baragoon/backrest/commit/dfd5ebeb936efff4cd8c359315d3d581553bbe6a))
+
+
+### Bug Fixes
+
+* **healthcheck:** replace the bind address file atomically ([829c060](https://github.com/baragoon/backrest/commit/829c060c434fd0ef931848fe9af06d1813124f09))
+* **healthcheck:** secure bind address locks and skip invalid discovery records ([b39013c](https://github.com/baragoon/backrest/commit/b39013c523e707c9aa602af89f4f39b6a1fd0473))
+
 ## [1.16.3](https://github.com/baragoon/backrest/compare/v1.16.2...v1.16.3) (2026-11-23)
 
 
