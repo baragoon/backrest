@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -78,6 +79,7 @@ func TestCheckHealth(t *testing.T) {
 }
 
 func TestHealthBindAddressFile(t *testing.T) {
+	useTestHealthLockDir(t)
 	path := filepath.Join(t.TempDir(), "bind-address")
 	t.Setenv("BACKREST_HEALTH_BIND_ADDRESS_FILE", path)
 
@@ -95,6 +97,7 @@ func TestHealthBindAddressFile(t *testing.T) {
 }
 
 func TestHealthBindAddressFileUsesTMPDIR(t *testing.T) {
+	useTestHealthLockDir(t)
 	tempDir := filepath.Join(t.TempDir(), "cache", "tmp")
 	t.Setenv("BACKREST_HEALTH_BIND_ADDRESS_FILE", "")
 	t.Setenv("BACKREST_HEALTHCHECK", "1")
@@ -125,6 +128,7 @@ func TestHealthBindAddressFileUsesTMPDIR(t *testing.T) {
 }
 
 func TestHealthBindAddressFilesAreDistinct(t *testing.T) {
+	useTestHealthLockDir(t)
 	tempDir := t.TempDir()
 	t.Setenv("BACKREST_HEALTH_BIND_ADDRESS_FILE", "")
 	t.Setenv("BACKREST_HEALTHCHECK", "1")
@@ -201,6 +205,7 @@ func TestHealthBindAddressRejectsReusedPID(t *testing.T) {
 }
 
 func TestRemoveHealthBindAddressPreservesReplacement(t *testing.T) {
+	useTestHealthLockDir(t)
 	const address = "127.0.0.1:1234"
 	for _, tt := range []struct {
 		name string
@@ -262,6 +267,7 @@ func TestHealthPIDRange(t *testing.T) {
 }
 
 func TestHealthBindAddressUsesEphemeralListenerAddress(t *testing.T) {
+	useTestHealthLockDir(t)
 	path := filepath.Join(t.TempDir(), "bind-address")
 	t.Setenv("BACKREST_HEALTH_BIND_ADDRESS_FILE", path)
 
@@ -281,6 +287,7 @@ func TestHealthBindAddressUsesEphemeralListenerAddress(t *testing.T) {
 }
 
 func TestWriteHealthBindAddressReplacesSymlink(t *testing.T) {
+	useTestHealthLockDir(t)
 	dir := t.TempDir()
 	target := filepath.Join(dir, "target")
 	path := filepath.Join(dir, "bind-address")
@@ -316,6 +323,7 @@ func TestWriteHealthBindAddressReplacesSymlink(t *testing.T) {
 }
 
 func TestWriteHealthBindAddressCleansUpAfterRenameFailure(t *testing.T) {
+	useTestHealthLockDir(t)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bind-address")
 	t.Setenv("BACKREST_HEALTH_BIND_ADDRESS_FILE", path)
@@ -332,24 +340,17 @@ func TestWriteHealthBindAddressCleansUpAfterRenameFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 2 {
-		t.Fatalf("expected the original directory and lock file, got %v", entries)
-	}
-	for _, entry := range entries {
-		if entry.Name() == filepath.Base(path) && entry.IsDir() {
-			continue
-		}
-		if entry.Name() == ".backrest-health-bind-address.lock" && entry.Type().IsRegular() {
-			continue
-		}
-		t.Fatalf("unexpected file after failed publication: %s", entry.Name())
+	if len(entries) != 1 || entries[0].Name() != filepath.Base(path) || !entries[0].IsDir() {
+		t.Fatalf("expected only the original directory after failed publication, got %v", entries)
 	}
 }
 
 func TestHealthBindAddressLockTimesOut(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bind-address")
-	lock := flock.New(filepath.Join(dir, ".backrest-health-bind-address.lock"), flock.SetPermissions(0666))
+	lockPath := filepath.Join(dir, "health.lock")
+	t.Setenv("BACKREST_HEALTH_BIND_ADDRESS_LOCK_FILE", lockPath)
+	lock := flock.New(lockPath)
 	if err := lock.Lock(); err != nil {
 		t.Fatal(err)
 	}
@@ -365,5 +366,38 @@ func TestHealthBindAddressLockTimesOut(t *testing.T) {
 	}
 	if called {
 		t.Fatal("health-address operation ran without acquiring the lock")
+	}
+}
+
+func useTestHealthLockDir(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("BACKREST_HEALTH_BIND_ADDRESS_LOCK_FILE", "")
+	t.Setenv("BACKREST_DATA", dir)
+	t.Setenv("USERPROFILE", dir)
+}
+
+func TestHealthBindAddressSkipsInvalidDiscoveredRecord(t *testing.T) {
+	useTestHealthLockDir(t)
+	dir := t.TempDir()
+	t.Setenv("BACKREST_HEALTH_BIND_ADDRESS_FILE", "")
+	t.Setenv("BACKREST_HEALTHCHECK", "1")
+	t.Setenv("TMPDIR", dir)
+
+	const address = "127.0.0.1:1234"
+	if err := writeHealthBindAddress(address); err != nil {
+		t.Fatal(err)
+	}
+	invalidPath := filepath.Join(dir, fmt.Sprintf("%s%d-!", healthBindAddressFileNamePrefix, os.Getpid()))
+	if err := os.WriteFile(invalidPath, []byte("malformed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := healthBindAddress(); err != nil || got != address {
+		t.Fatalf("healthBindAddress() = %q, %v; want %q", got, err, address)
+	}
+	t.Setenv("BACKREST_HEALTH_BIND_ADDRESS_FILE", invalidPath)
+	if _, err := healthBindAddress(); err == nil || !strings.Contains(err.Error(), "decoding healthcheck bind address") {
+		t.Fatalf("healthBindAddress() error = %v; want decoding error for explicit path", err)
 	}
 }

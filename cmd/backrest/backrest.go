@@ -40,7 +40,6 @@ import (
 	"github.com/baragoon/backrest/internal/orchestrator"
 	"github.com/baragoon/backrest/internal/resticinstaller"
 	"github.com/baragoon/backrest/webui"
-	"github.com/gofrs/flock"
 	"github.com/mattn/go-colorable"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -298,7 +297,8 @@ func healthBindAddress() (string, error) {
 		}
 		address, active, err := readHealthBindAddress(filepath.Join(tempDir, name), uint32(pid))
 		if err != nil {
-			return "", fmt.Errorf("checking healthcheck process %d: %w", pid, err)
+			// An unsolicited record must not prevent discovery of other instances.
+			continue
 		}
 		if active {
 			paths = append(paths, address)
@@ -337,6 +337,9 @@ func readHealthBindAddress(path string, expectedPID uint32) (string, bool, error
 	}
 	if !running || startID != metadata.StartID {
 		return "", false, nil
+	}
+	if _, err := healthProbeURL(metadata.Address); err != nil {
+		return "", false, err
 	}
 	return metadata.Address, true, nil
 }
@@ -432,23 +435,71 @@ func removeHealthBindAddress(address string) {
 	}
 }
 
+func healthBindAddressLockPath(path string) (string, error) {
+	if lockPath := os.Getenv("BACKREST_HEALTH_BIND_ADDRESS_LOCK_FILE"); lockPath != "" {
+		return lockPath, nil
+	}
+	dir, err := privateHealthLockDir()
+	if err != nil {
+		return "", err
+	}
+	// Serialize updates to records in the same directory.
+	recordDir, err := filepath.Abs(filepath.Dir(path))
+	if err != nil {
+		return "", err
+	}
+	recordDir, err = filepath.EvalSymlinks(recordDir)
+	if err != nil {
+		return "", err
+	}
+	if runtime.GOOS == "windows" {
+		recordDir = strings.ToLower(recordDir)
+	}
+	hash := sha256.Sum256([]byte(recordDir))
+	return filepath.Join(dir, hex.EncodeToString(hash[:])+".lock"), nil
+}
+
 func withHealthBindAddressLock(path string, fn func() error) (err error) {
 	healthBindAddressMu.Lock()
 	defer healthBindAddressMu.Unlock()
 
-	lockPath := filepath.Join(filepath.Dir(path), ".backrest-health-bind-address.lock")
-	lock := flock.New(lockPath, flock.SetPermissions(0666))
+	lockPath, err := healthBindAddressLockPath(path)
+	if err != nil {
+		return fmt.Errorf("locating healthcheck bind address lock: %w", err)
+	}
+	info, err := os.Lstat(lockPath)
+	if err == nil && !info.Mode().IsRegular() {
+		return fmt.Errorf("healthcheck lock %q is not a regular file", lockPath)
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("checking healthcheck bind address lock: %w", err)
+	}
+	lock, err := openHealthLock(lockPath)
+	if err != nil {
+		return fmt.Errorf("opening healthcheck bind address lock: %w", err)
+	}
+	defer lock.close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), healthBindAddressLockTimeout)
 	defer cancel()
-	locked, err := lock.TryLockContext(ctx, 10*time.Millisecond)
-	if err != nil {
-		return fmt.Errorf("locking healthcheck bind address: %w", err)
-	}
-	if !locked {
-		return fmt.Errorf("locking healthcheck bind address: timed out")
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		locked, err := lock.tryLock()
+		if err != nil {
+			return fmt.Errorf("locking healthcheck bind address: %w", err)
+		}
+		if locked {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("locking healthcheck bind address: %w", ctx.Err())
+		case <-ticker.C:
+		}
 	}
 	defer func() {
-		if unlockErr := lock.Unlock(); unlockErr != nil {
+		if unlockErr := lock.unlock(); unlockErr != nil {
 			err = errors.Join(err, fmt.Errorf("unlocking healthcheck bind address: %w", unlockErr))
 		}
 	}()
