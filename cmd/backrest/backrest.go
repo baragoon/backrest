@@ -8,14 +8,18 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	v1 "github.com/baragoon/backrest/gen/go/v1"
 	"github.com/baragoon/backrest/gen/go/v1/v1connect"
@@ -56,6 +60,17 @@ var onOpLogReady func(*oplog.OpLog)
 
 func runApp() {
 	flag.Parse()
+	if len(flag.Args()) > 0 && flag.Arg(0) == "health" {
+		address, err := healthBindAddress()
+		if err == nil {
+			err = checkHealth(address)
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if *printVersion {
 		fmt.Printf("backrest version: %s, commit: %s\n", version, commit)
 		os.Exit(0)
@@ -71,6 +86,7 @@ func runApp() {
 		zap.L().Info("dependencies installed, exiting")
 		return
 	}
+	bindAddress := env.BindAddress()
 
 	// Setup context and signal handling
 	ctx, cancel := context.WithCancel(context.Background())
@@ -90,6 +106,9 @@ func runApp() {
 		zap.L().Fatal("error creating oplog", zap.Error(err))
 	}
 	defer opLogStore.Close()
+	if err := writeHealthBindAddress(bindAddress); err != nil {
+		zap.L().Fatal("error recording healthcheck bind address", zap.Error(err))
+	}
 
 	// onOpLogReady lets the system tray (when built with -tags tray) observe
 	// operation status in-process to reflect backup state in its icon. It is
@@ -141,7 +160,7 @@ func runApp() {
 	}()
 
 	// Setup and start HTTP server
-	server := newServer(configMgr, peerStateManager, orch, opLog, logStore, syncMgr, authenticator)
+	server := newServer(configMgr, peerStateManager, orch, opLog, logStore, syncMgr, authenticator, bindAddress)
 	go func() {
 		<-ctx.Done()
 		server.Shutdown(context.Background())
@@ -154,6 +173,88 @@ func runApp() {
 	zap.L().Info("HTTP gateway shutdown")
 
 	wg.Wait()
+}
+
+func checkHealth(address string) error {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return fmt.Errorf("invalid Backrest bind address %q: %w", address, err)
+	}
+	switch host {
+	case "", "0.0.0.0":
+		host = "127.0.0.1"
+	case "::":
+		host = "::1"
+	}
+
+	probeURL := url.URL{
+		Scheme: "http",
+		Host:   net.JoinHostPort(host, port),
+		Path:   "/",
+	}
+	client := http.Client{
+		Timeout:   2 * time.Second,
+		Transport: &http.Transport{Proxy: nil},
+	}
+	response, err := client.Get(probeURL.String())
+	if err != nil {
+		return fmt.Errorf("Backrest healthcheck failed: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("Backrest healthcheck failed: HTTP status %s", response.Status)
+	}
+	return nil
+}
+
+func healthBindAddress() (string, error) {
+	if bindAddressFlag := flag.Lookup("bind-address"); bindAddressFlag != nil && bindAddressFlag.Value.String() != "" {
+		return env.BindAddress(), nil
+	}
+	path, enabled := healthBindAddressFile()
+	if !enabled {
+		return env.BindAddress(), nil
+	}
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return env.BindAddress(), nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("reading healthcheck bind address: %w", err)
+	}
+	address := strings.TrimSpace(string(data))
+	if address == "" {
+		return "", fmt.Errorf("healthcheck bind address file %q is empty", path)
+	}
+	return address, nil
+}
+
+func writeHealthBindAddress(address string) error {
+	path, enabled := healthBindAddressFile()
+	if !enabled {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("creating healthcheck bind address directory: %w", err)
+	}
+	if err := os.WriteFile(path, []byte(address), 0644); err != nil {
+		return fmt.Errorf("writing healthcheck bind address: %w", err)
+	}
+	return nil
+}
+
+func healthBindAddressFile() (string, bool) {
+	if path := os.Getenv("BACKREST_HEALTH_BIND_ADDRESS_FILE"); path != "" {
+		return path, true
+	}
+	if os.Getenv("BACKREST_HEALTHCHECK") != "1" {
+		return "", false
+	}
+	tempDir := os.Getenv("TMPDIR")
+	if tempDir == "" {
+		tempDir = "/tmp"
+	}
+	return filepath.Join(tempDir, "backrest-health-bind-address"), true
 }
 
 func createConfigStore() config.ConfigStore {
@@ -237,6 +338,7 @@ func newServer(
 	logStore *logstore.LogStore,
 	syncMgr *syncapi.SyncManager,
 	authenticator *auth.Authenticator,
+	bindAddress string,
 ) *http.Server {
 	// API Handlers
 	apiBackrestHandler := api.NewBackrestHandler(configMgr, peerStateManager, orch, opLog, logStore)
@@ -254,7 +356,7 @@ func newServer(
 	}
 
 	return &http.Server{
-		Addr:    env.BindAddress(),
+		Addr:    bindAddress,
 		Handler: h2c.NewHandler(handler, &http2.Server{}),
 	}
 }
