@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.17.1](https://github.com/baragoon/backrest/compare/v1.17.0...v1.17.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **deps:** update google.golang.org/genproto/googleapis/api digest to 1e707ab ([3542139](https://github.com/baragoon/backrest/commit/3542139818828319fe66e181bc35b01853a518a2))
+* **deps:** update google.golang.org/genproto/googleapis/api digest to 1e707ab ([a0e83c1](https://github.com/baragoon/backrest/commit/a0e83c159cbd32250b93476649c3c8edf84af49e))
+* **docker:** add coreutils, nice, and ionice to the scratch image for command priority settings ([4d5aaa7](https://github.com/baragoon/backrest/commit/4d5aaa78e9d308503996fe5a7f9e9f4ada8e66e2))
+* **docker:** add coreutils, nice, and ionice to the scratch image for command priority settings ([419b814](https://github.com/baragoon/backrest/commit/419b814124c0d74780bc2dc9837da3af2f8125ad))
+* **docker:** update scratch image to use chpst for nice and ionice, remove coreutils ([3e4f47e](https://github.com/baragoon/backrest/commit/3e4f47e45e2e25206903bc4c855fc738eaaa8ba6))
+
 ## [1.17.0](https://github.com/baragoon/backrest/compare/v1.16.3...v1.17.0) (2026-11-23)
 
 
