@@ -35,7 +35,8 @@ ARG TARGETPLATFORM
 COPY $TARGETPLATFORM/backrest /backrest
 COPY $TARGETPLATFORM/docker-entrypoint /docker-entrypoint
 
-ENV BACKREST_HEALTHCHECK=1
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    BACKREST_HEALTHCHECK=1
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5m --retries=3 CMD ["/backrest", "health"]
 

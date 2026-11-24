@@ -110,6 +110,12 @@ Image: `ghcr.io/baragoon/backrest`.
 - For a minimal image, use `ghcr.io/baragoon/backrest:scratch`. It includes
   `nice` and `ionice` for repository command priority settings.
 
+For `CPU_HIGH`, Docker containers typically need the `CAP_SYS_NICE` capability
+(for example, `cap_add: [SYS_NICE]` in Compose) or a suitable `RLIMIT_NICE`.
+Without permission to increase priority, the requested priority cannot be applied.
+If overriding `PATH` in the scratch image, include `/bin` so Backrest can find
+`nice` and `ionice`.
+
 ### Docker Compose
 
 ```yaml
