@@ -107,7 +107,8 @@ sudo systemctl enable --now backrest@$USER.service
 Image: `ghcr.io/baragoon/backrest`.
 
 - Includes rclone and common Unix utilities
-- For a minimal image, use `ghcr.io/baragoon/backrest:scratch`
+- For a minimal image, use `ghcr.io/baragoon/backrest:scratch`. It includes
+  `nice` and `ionice` for repository command priority settings.
 
 ### Docker Compose
 
