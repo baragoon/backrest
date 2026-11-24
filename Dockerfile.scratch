@@ -2,8 +2,10 @@
 
 # Stage 1: Dependencies (Alpine)
 FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS alpine
-RUN apk add --no-cache ca-certificates tini-static
+RUN apk add --no-cache ca-certificates runit tini-static util-linux-misc
 RUN mkdir /tmp-orig
+RUN mkdir -p /priority-libs/lib && \
+    cp -L /lib/ld-musl-*.so.1 /priority-libs/lib/
 
 ARG TARGETPLATFORM
 # Binaries are staged per-platform by goreleaser dockers_v2
@@ -19,6 +21,10 @@ LABEL org.opencontainers.image.source="https://github.com/baragoon/backrest"
 
 COPY --from=alpine --chmod=1777 /tmp-orig /tmp
 RUN --mount=from=alpine,source=/bin/busybox,target=/bin/busybox --mount=from=alpine,source=/lib,target=/lib ["/bin/busybox", "chmod", "1777", "/tmp"]
+COPY --from=alpine /priority-libs/ /
+# chpst supports the nice -n invocation and fails if setting priority fails.
+COPY --from=alpine /usr/sbin/chpst /bin/nice
+COPY --from=alpine /bin/ionice /bin/ionice
 COPY --from=alpine /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=alpine /bin/restic /bin/restic
 COPY --from=alpine /sbin/tini-static /tini
@@ -27,7 +33,8 @@ ARG TARGETPLATFORM
 COPY $TARGETPLATFORM/backrest /backrest
 COPY $TARGETPLATFORM/docker-entrypoint /docker-entrypoint
 
-ENV BACKREST_HEALTHCHECK=1
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    BACKREST_HEALTHCHECK=1
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5m --retries=3 CMD ["/backrest", "health"]
 
