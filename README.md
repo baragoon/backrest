@@ -113,6 +113,7 @@ Image: `ghcr.io/baragoon/backrest`.
 For `CPU_HIGH`, Docker containers typically need the `CAP_SYS_NICE` capability
 (for example, `cap_add: [SYS_NICE]` in Compose) or a suitable `RLIMIT_NICE`.
 Without permission to increase priority, the requested priority cannot be applied.
+In the scratch image, the operation fails rather than running at the original priority.
 If overriding `PATH` in the scratch image, include `/bin` so Backrest can find
 `nice` and `ionice`.
 
