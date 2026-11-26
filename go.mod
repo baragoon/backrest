@@ -19,7 +19,7 @@ require (
 	github.com/hectane/go-acl v1.0.0
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/mattn/go-colorable v0.1.16
-	github.com/ncruces/go-sqlite3 v0.38.0
+	github.com/ncruces/go-sqlite3 v0.38.1
 	github.com/ncruces/zenity v0.10.15
 	github.com/nicholas-fedor/shoutrrr v0.25.1
 	github.com/pkg/sftp v1.13.13
