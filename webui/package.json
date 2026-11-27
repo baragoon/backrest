@@ -49,7 +49,7 @@
   },
   "devDependencies": {
     "@google/genai": "3.6.1",
-    "@inlang/cli": "3.6.0",
+    "@inlang/cli": "3.7.0",
     "@inlang/paraglide-js": "3.2.2",
     "@inlang/sdk": "4.3.0",
     "@playwright/test": "1.65.1",
