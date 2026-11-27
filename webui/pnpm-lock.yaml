@@ -34,7 +34,7 @@ importers:
         version: 11.14.0(@types/react@19.3.0)(react@19.3.1)
       cronstrue:
         specifier: ^3.9.0
-        version: 3.46.0
+        version: 3.48.0
       cross-env:
         specifier: ^10.1.0
         version: 10.1.0
@@ -626,10 +626,6 @@ packages:
 
   '@inlang/recommend-sherlock@0.2.1':
     resolution: {integrity: sha512-ckv8HvHy/iTqaVAEKrr+gnl+p3XFNwe5D2+6w6wJk2ORV2XkcRkKOJ/XsTUJbPSiyi4PI+p+T3bqbmNx/rDUlg==}
-
-  '@inlang/sdk@4.2.0':
-    resolution: {integrity: sha512-Cmaqvn34wsxiF27318Zw2rg+017HHNJWV5MH8rfyVKVANZNpzlztxzRbFienE/gASMLD8oluYHHolIb/p6Egrw==}
-    engines: {node: '>=20.0.0'}
 
   '@inlang/sdk@4.3.0':
     resolution: {integrity: sha512-ZPX9nqex9DglvMO9URpY6EtpwzUkTeArHZLcHx03hO+v6jsQPOtKgfki2nbgKEysfhJVMy0JDOAiax9zPZuF4w==}
@@ -1975,8 +1971,8 @@ packages:
     resolution: {integrity: sha512-AdmX6xUzdNASswsFtmwSt7Vj8po9IuqXm0UXz7QKPuEUmPB4XyjGfaAr2PSuELMwkRMVH1EpIkX5bTZGRB3eCA==}
     engines: {node: '>=10'}
 
-  cronstrue@3.46.0:
-    resolution: {integrity: sha512-ipaGUyFc2EZcgiY0Yuxr+u+pTWn8Xfe6jjAF8huJXqADYJqBdJ1BMeM6a5DyQLCsVjMj4yMvt2T/dd0cNQpgsw==}
+  cronstrue@3.48.0:
+    resolution: {integrity: sha512-Exb3oiF8x96sw2wnwWLGuBKcDjmZiOOvuu6/UANXFAhW4stNQpfcb2dkD89qwF5QLzz//9y6+yB3aNnVjga2Ew==}
     hasBin: true
 
   cross-env@10.1.0:
@@ -3620,13 +3616,6 @@ snapshots:
     dependencies:
       comment-json: 4.6.2
 
-  '@inlang/sdk@4.2.0':
-    dependencies:
-      '@lix-js/sdk': 0.20.1
-      '@sinclair/typebox': 0.31.30
-      kysely: 0.28.20
-      uuid: 14.0.3
-
   '@inlang/sdk@4.3.0':
     dependencies:
       '@lix-js/sdk': 0.20.1
@@ -5172,7 +5161,7 @@ snapshots:
       path-type: 4.0.0
       yaml: 1.10.3
 
-  cronstrue@3.46.0: {}
+  cronstrue@3.48.0: {}
 
   cross-env@10.1.0:
     dependencies:
