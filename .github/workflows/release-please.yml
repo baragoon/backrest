@@ -34,6 +34,10 @@ jobs:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     uses: ./.github/workflows/reusable-release.yml
+    permissions:
+      contents: write
+      packages: write
+      issues: write
     with:
       snapshot: false
       tag: ${{ needs.release-please.outputs.tag_name }}
