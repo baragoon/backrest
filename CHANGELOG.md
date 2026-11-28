@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.18.0](https://github.com/baragoon/backrest/compare/v1.17.1...v1.18.0) (2026-11-28)
+
+
+### Features
+
+* add Renovate rescan trigger to reusable release workflow ([56625b4](https://github.com/baragoon/backrest/commit/56625b4c030dbacf94b2872e04c169971d21f2f2))
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/ncruces/go-sqlite3 to v0.38.1 ([#135](https://github.com/baragoon/backrest/issues/135)) ([e03e373](https://github.com/baragoon/backrest/commit/e03e3736f733cae17ad2b7778585e938aabe2818))
+* **deps:** update module github.com/nicholas-fedor/shoutrrr to v0.25.1 ([80de144](https://github.com/baragoon/backrest/commit/80de144087f9bb3241a3518958fb917714973de6))
+* **deps:** update module github.com/nicholas-fedor/shoutrrr to v0.25.1 ([a27d600](https://github.com/baragoon/backrest/commit/a27d600a53e982738bfea6a235af806612d2e817))
+* **deps:** update module github.com/pkg/sftp to v1.13.13 ([5f39b13](https://github.com/baragoon/backrest/commit/5f39b13bd04de1e895551fb26e929eac12c7400c))
+* **deps:** update module github.com/pkg/sftp to v1.13.13 ([ad11e8a](https://github.com/baragoon/backrest/commit/ad11e8a9bbc1737734a03ff6453761df18d5569b))
+
 ## [1.17.1](https://github.com/baragoon/backrest/compare/v1.17.0...v1.17.1) (2026-11-24)
 
 
