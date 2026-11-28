@@ -70,8 +70,8 @@ importers:
         specifier: 3.6.1
         version: 3.6.1
       '@inlang/cli':
-        specifier: 3.7.0
-        version: 3.7.0
+        specifier: 3.7.1
+        version: 3.7.1
       '@inlang/paraglide-js':
         specifier: 3.2.2
         version: 3.2.2(typescript@7.0.2)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.108.2)(tsx@4.23.15))
@@ -607,8 +607,8 @@ packages:
       '@modelcontextprotocol/sdk':
         optional: true
 
-  '@inlang/cli@3.7.0':
-    resolution: {integrity: sha512-vZsIkA1jOcoh0NZCUrC7pB3rAiqPL0YU6XcWfeWvUdORZLwg6WXQ0Tjw7sTT0ZuNNymGEHSb5T7j4G2vRcl0WQ==}
+  '@inlang/cli@3.7.1':
+    resolution: {integrity: sha512-HEXEI4mJ7pMkE4h/0VX0Cs1j1TFCcFSSe7e1G/Ra7H5U7lSMViVMb898vAD4/UZtOB479obSJydNcMuWf/S6Pw==}
     engines: {node: '>=20.3.0'}
     hasBin: true
 
@@ -3585,7 +3585,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@inlang/cli@3.7.0':
+  '@inlang/cli@3.7.1':
     dependencies:
       '@inlang/sdk': 4.3.0
       esbuild-wasm: 0.19.12
