@@ -248,6 +248,16 @@ jobs:
         with:
           tag_name: ${{ inputs.tag }}
           files: "backrest_Darwin_${{ steps.arch.outputs.name }}.zip"
+
+  renovate_run:
+    name: trigger renovate rescan
+    needs: [goreleaser]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
       - name: Trigger Renovate rescan
         if: success()
         env:
