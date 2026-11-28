@@ -9,7 +9,7 @@
     "lint": "eslint ."
   },
   "devDependencies": {
-    "@types/node": "26.6.6",
+    "@types/node": "26.6.7",
     "eslint": "10.15.0",
     "vitepress": "1.6.4",
     "vue": "3.5.46"
